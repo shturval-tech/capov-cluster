@@ -1,0 +1,11 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: vmrule-system-{{ include "capsm-cluster-vm.monitoringid" . }}
+  namespace: {{ .Release.Name }}
+  labels:
+    cluster: {{ .Release.Name }}
+    monitoringid: "{{ include "capsm-cluster-vm.monitoringid" . }}"
+    role: system
+  {{- include "capsm-cluster-vm.labels" . | nindent 4 }}
+{{ .Files.Get .Values.vmruleSystemSpecFile }}

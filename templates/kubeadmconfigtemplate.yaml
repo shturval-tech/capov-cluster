@@ -1,0 +1,51 @@
+{{- $ciHostname := "{{ ds.meta_data.hostname }}" -}}
+{{- range $k, $v := .Values.workerNodes }}
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+kind: KubeadmConfigTemplate
+metadata:
+  name: {{ $.Release.Name }}-{{ $k }}
+  namespace: {{ $.Release.Name }}
+  labels:
+    cluster.x-k8s.io/cluster-name: {{ $.Release.Name }}
+    {{- include "capov-cluster.labels" $ | nindent 4 }}
+spec:
+  template:
+    spec:
+      files:
+      - content: {{ include "capov-cluster.nci.json.b64" (dict "ctx" $ "controlplane" false) | quote }}
+        encoding: base64
+        owner: root:root
+        path: /etc/std/nci.json
+        permissions: "0600"
+      joinConfiguration:
+        nodeRegistration:
+          criSocket: unix:///run/containerd/containerd.sock
+          imagePullPolicy: IfNotPresent
+          {{- if .labels }}
+          kubeletExtraArgs:
+          - name: node-labels
+            value: {{ join "," .labels | quote }}
+          {{- end }}
+          {{- if .taints }}
+          taints: {{- toYaml .taints | nindent 10 }}
+          {{- end }}
+        {{- if $.Values.kubeadmPatches.directory }}
+        patches:
+          directory: {{ $.Values.kubeadmPatches.directory | quote }}
+        {{- end }}
+      postKubeadmCommands:
+      - if [ ! -f /etc/kubernetes/super-admin.conf ]; then ln -s /etc/kubernetes/admin.conf
+        /etc/kubernetes/super-admin.conf ; fi
+      preKubeadmCommands:
+      - sudo mkdir -p /etc/kubernetes
+      - if [ -f /run/kubeadm/kubeadm.yaml ]; then echo {{ include "capov-cluster.kubelet.b64" $ }} | base64 -d | tee -a /run/kubeadm/kubeadm.yaml; fi
+      - hostname $(cloud-init query --format "{{ $ciHostname }}")
+      - echo "::1         ipv6-localhost ipv6-loopback" >/etc/hosts
+      - echo "127.0.0.1   localhost" >>/etc/hosts
+      - echo "127.0.0.1   $(cloud-init query --format \"{{ $ciHostname }}\")" >>/etc/hosts
+      - echo $(cloud-init query --format "{{ $ciHostname }}") >/etc/hostname
+      - hostname $(cloud-init query --format "{{ $ciHostname }}")
+      - while [ "$(systemctl is-active containerd)" != "active" ]; do echo "Waiting for containerd to come up..."; sleep 3; done
+      - while [ "$(sudo std node status)" != "synched" ]; do echo "Waiting for shturvald to be synced..."; sleep 3; done
+---
+{{- end }}

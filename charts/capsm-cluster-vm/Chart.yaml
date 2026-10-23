@@ -1,0 +1,6 @@
+apiVersion: v2
+name: capsm-cluster-vm
+description: VictoriaMetrics VMRule / VMAlert для клиентского кластера (deps родительского чарта)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

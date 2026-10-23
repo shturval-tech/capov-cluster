@@ -1,0 +1,149 @@
+{{- $ciHostname := "{{ ds.meta_data.hostname }}" -}}
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: KubeadmControlPlane
+metadata:
+  name: {{ .Release.Name }}-control-plane
+  namespace: {{ .Release.Name }}
+  labels:
+    cluster.x-k8s.io/cluster-name: {{ .Release.Name }}
+    {{- include "capov-cluster.labels" . | nindent 4 }}
+spec:
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      apiServer:
+        certSANs:
+        - {{ .Values.clusterAPI }}
+        {{- tpl ( include "capov-cluster.apiserver" . ) . | nindent 8 }}
+        {{- if .Values.apiServer }}{{ if .Values.apiServer.extraArgs }}
+        extraArgs:
+          {{- range $k, $v := .Values.apiServer.extraArgs }}
+          - name: {{ $k }}
+            value: "{{ tpl $v $ }}"
+          {{- end }}
+        {{- end }}{{ end }}
+        {{- if .Values.secure }}
+        extraVolumes:
+        - hostPath: {{ .Values.auditPolicy.location | quote }}
+          mountPath: {{ .Values.auditPolicy.location | quote }}
+          name: audit
+          pathType: File
+          readOnly: true
+        - hostPath: /var/log/kube-api-audit/
+          mountPath: /var/log/kube-api-audit/
+          name: audit-log
+          pathType: DirectoryOrCreate
+        - hostPath: /etc/kubernetes/secrets_encryption.yaml
+          mountPath: /etc/kubernetes/secrets_encryption.yaml
+          name: secret-encryption
+          pathType: File
+          readOnly: true
+        {{- end }}
+      certificatesDir: /etc/kubernetes/pki
+      controlPlaneEndpoint: {{ .Values.clusterAPI }}
+      {{- include "capov-cluster.controllerManager" . | nindent 6 }}
+      {{- if .Values.controllerManager }}
+      controllerManager:
+        {{- if .Values.controllerManager.extraArgs }}
+        extraArgs:
+          {{- range $k, $v := .Values.controllerManager.extraArgs }}
+          - name: {{ $k }}
+            value: "{{ tpl $v $ }}"
+          {{- end }}
+        {{- end }}
+      {{- end }}
+      etcd:
+      {{- if .Values.etcd.external }}
+        external:
+          endpoints:
+          {{- range $_, $v := .Values.etcd.external.endpoints }}
+            - {{ $v | quote }}
+          {{- end }}
+          caFile: "/etc/kubernetes/pki/etcd/ca.crt"
+          certFile: "/etc/kubernetes/pki/etcd/healthcheck-client.crt"
+          keyFile: "/etc/kubernetes/pki/etcd/healthcheck-client.key"
+      {{- else }}
+        local: {{ toYaml .Values.etcd.local | nindent 10 }}
+      {{- end }}
+      imageRepository: r.shturval.tech
+      {{- include "capov-cluster.scheduler" . | nindent 6 }}
+      {{- if .Values.scheduler }}
+      scheduler:
+        {{- if .Values.scheduler.extraArgs }}
+        extraArgs:
+          {{- range $k, $v := .Values.scheduler.extraArgs }}
+          - name: {{ $k }}
+            value: "{{ tpl $v $ }}"
+          {{- end }}
+        {{- end }}
+      {{- end }}
+    files:
+    - content: {{ include "capov-cluster.nci.json.b64" (dict "ctx" . "controlplane" true) | quote }}
+      encoding: base64
+      owner: root:root
+      path: /etc/std/nci.json
+      permissions: "0600"
+    initConfiguration:
+      nodeRegistration:
+        criSocket: unix:///run/containerd/containerd.sock
+        imagePullPolicy: IfNotPresent
+        {{- if .Values.master.labels }}
+        kubeletExtraArgs:
+        - name: node-labels
+          value: {{ join "," .Values.master.labels | quote }}
+        {{- end }}
+        {{- if .Values.master.taints }}
+        taints: {{- toYaml .Values.master.taints | nindent 8 }}
+        {{- end }}
+      {{- if .Values.kubeadmPatches.directory }}
+      patches:
+        directory: {{ .Values.kubeadmPatches.directory | quote }}
+      {{- end }}
+      skipPhases:
+      - addon/kube-proxy
+    joinConfiguration:
+      nodeRegistration:
+        criSocket: unix:///run/containerd/containerd.sock
+        imagePullPolicy: IfNotPresent
+        {{- if .Values.master.labels }}
+        kubeletExtraArgs:
+        - name: node-labels
+          value: {{ join "," .Values.master.labels | quote }}
+        {{- end }}
+        {{- if .Values.master.taints }}
+        taints: {{- toYaml .Values.master.taints | nindent 8 }}
+        {{- end }}
+      {{- if .Values.kubeadmPatches.directory }}
+      patches:
+        directory: {{ .Values.kubeadmPatches.directory | quote }}
+      {{- end }}
+    postKubeadmCommands:
+    - if [ ! -f /etc/kubernetes/super-admin.conf ]; then ln -s /etc/kubernetes/admin.conf
+      /etc/kubernetes/super-admin.conf ; fi
+    preKubeadmCommands:
+    - sudo mkdir -p /etc/kubernetes
+    - if [ -f /run/kubeadm/kubeadm.yaml ]; then echo {{ include "capov-cluster.kubelet.b64" . }} | base64 -d | tee -a /run/kubeadm/kubeadm.yaml; fi
+    - hostname $(cloud-init query --format "{{ $ciHostname }}")
+    - echo "::1         ipv6-localhost ipv6-loopback" >/etc/hosts
+    - echo "127.0.0.1   localhost" >>/etc/hosts
+    - echo "127.0.0.1   $(cloud-init query --format \"{{ $ciHostname }}\")" >>/etc/hosts
+    - echo $(cloud-init query --format "{{ $ciHostname }}") >/etc/hostname
+    - hostname $(cloud-init query --format "{{ $ciHostname }}")
+    - while [ "$(systemctl is-active containerd)" != "active" ]; do echo "Waiting for containerd to come up..."; sleep 3; done
+    - while [ "$(sudo std node status)" != "synched" ]; do echo "Waiting for shturvald to be synced..."; sleep 3; done
+  machineTemplate:
+    spec:
+      deletion:
+        nodeDeletionTimeoutSeconds: 600
+        nodeDrainTimeoutSeconds: 600
+        nodeVolumeDetachTimeoutSeconds: 300
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: OVirtMachineTemplate
+        name: {{ .Release.Name }}-control-plane
+  replicas: {{ .Values.master.replicas }}
+  rollout:
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+      type: RollingUpdate
+  version: v{{ .Values.kubeVersion }}

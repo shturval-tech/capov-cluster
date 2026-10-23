@@ -1,0 +1,388 @@
+# Лицензия Штурвала (замените на реальную или передайте через --set / отдельный values-файл)
+licensetoken: "XXXXXXXX"
+# Имя хоста с зеркалом Штурвала
+systemregistry: myregistry.domain.tld
+
+# shturvalReleaseVersion: 2.11.0
+# kubeVersion: 1.33.1
+# shturvalReleaseVersion: 2.12.1
+# kubeVersion: 1.34.1
+# shturvalReleaseVersion: 2.13.1
+# kubeVersion: 1.34.3
+shturvalReleaseVersion: 2.14.0 # Версия устанавливаемого кластера Штурвал
+kubeVersion: 1.35.1 # Версия устанавливаемого кубернетеса
+
+# Актуальные образы в 2.14 для bootstrap NCI (pause / kube-vip) и cluster-autoscaler
+images:
+  pause: r.shturval.tech/pause:3.10.1
+  kubeVip: r.shturval.tech/kube-vip:v1.0.4-280041
+  # clusterAutoscaler: r.shturval.tech/autoscaling/cluster-autoscaler:v1.35.1 # по умолчанию: r.shturval.tech/autoscaling/cluster-autoscaler:v{{ kubeVersion }}
+
+services:
+  # Минимальный набор сервисов для 2.14 - значение применятся только в момент инициализации кластера и изменения ни к чему не приведут
+  enabledservices:
+  - shturval-node-config
+  - shturval-trust-manager
+  - shturval-node-config-crds
+  - shturval-snapshotter
+  - shturval-metrics-collector-crds
+  - shturval-vip-provider
+  - shturval-caching-dns
+  - shturval-vip
+  - shturval-networking
+  - shturval-policy-manager-crds
+  - shturval-cert-manager
+  - shturval-services-crds
+  - shturval-snapshotter-crds
+  - shturval-services
+  - shturval-trust-manager-crds
+  - shturval-monitoring-crds
+  - shturval-update
+  - shturval-ingress-controller
+  - shturval-local-csi
+  - shturval-update-crds
+  - shturval-cert-manager-crds
+  disablesservices:
+  - shturval-metrics-collector
+  - shturval-log-collector-crds
+  - shturval-backup
+  - shturval-scanner
+  - shturval-cd
+  - shturval-policy-manager
+  - shturval-scanner-crds
+  - shturval-rollouts
+  - shturval-cd-crds
+  - shturval-rollouts-crds
+  - shturval-gateway-api-crds
+  - shturval-descheduler
+  - shturval-backup-crds
+  - shturval-log-collector
+  - shturval-cert-expiration
+
+# Конфигурация etcd
+etcd:
+  external: {}
+    # endpoints:
+    #   - "https://10.0.0.1:2379"
+    # caCrt: "conf/ext_etcd-ca.crt"    # CA сертификат от ETCD
+    # apiCrt: "conf/ext_etcd-client.crt" # Клиентский сертификат для подключения к ETCD
+    # apiKey: "conf/ext_etcd-client.key" # Ключ от клиентского сертификата
+  local:
+    dataDir: /var/lib/etcd
+    imageTag: v3.6.7
+    # extraArgs: {}
+
+# Инициализация узлов (ShturvalInit / nci.json)
+# Интерфейс для kube-vip VIP; образы pause/kube-vip задаются в images.*
+nodeInit:
+  kubevip:
+    # Сетевой интерфейс на master-узле для kube-vip VIP (обычно основной интерфейс ВМ)
+    interface: "eth0"
+
+# Настройки провайдера oVirt (capov)
+capov:
+  providerName: "" # имя создаваемого OVirtProvider (если не указан, используется имя релиза)
+
+  # Полный адрес oVirt Engine API
+  engineAddress: "https://ovirt.example.com/ovirt-engine/api"
+  # Учётные данные oVirt Engine
+  username: "admin@internal"
+  password: "secret"
+
+  # TLS конфигурация
+  tls:
+    # Не проверять TLS-сертификат oVirt Engine (только для dev/test!)
+    insecure: false
+    # Использовать системные CA сертификаты для проверки oVirt Engine
+    useSystemCA: false
+    # Путь к PEM-файлу с CA-сертификатом oVirt Engine (если не используется системный CA)
+    caCertsFile: "" # пример: "conf/ovirt-ca.pem"
+
+  # Аннотации и метки OVirtProvider — используются shturvald для подбора параметров ВМ по умолчанию
+
+  # Датацентр oVirt (обязательно)
+  datacenter: "Default"
+  # Кластер oVirt (гипервизорный) — используется как значение по умолчанию для всех ВМ (обязательно)
+  ovirtCluster: "Default"
+  # Домен хранилища (Storage Domain) oVirt (обязательно)
+  storageDomainName: "data"
+  # Имя сетевого интерфейса внутри шаблона ВМ для cloud-init (обязательно)
+  templateNetInterface: "eth0"
+  # Тип ВМ по умолчанию: desktop, server, high_performance (обязательно)
+  defaultVmType: "server"
+  # vNIC профиль oVirt по умолчанию (обязательно)
+  defaultVnicProfile: "ovirtmgmt"
+  # Разрешить управление CSI через shturval (обязательно)
+  allowEditCSI: "true"
+  # Имя пула IP-адресов (опционально) — если задан, добавляется метка shturval.tech/ip-pool-name
+  ipPoolName: ""  # пример: "my-pool"
+
+  # Соответствие версий Kubernetes шаблонам ВМ oVirt.
+  # Ключ — версия Kubernetes (с "v"), значение — имя шаблона в oVirt.
+  # Аннотация template.shturval.tech/<version> будет добавлена к OVirtProvider.
+  # Если в группе узлов не задан template, автоматически подбирается по kubeVersion.
+  kubeTemplates:
+    v1.35.1: redos8-shturval-2.14
+  # пример:
+  # kubeTemplates:
+  #   v1.35.1: redos8-shturval-2.14
+  #   v1.34.3: redos8-shturval-2.13
+  #   v1.33.1: redos8-shturval-2.11
+
+master: # конфигурация control plane
+  replicas: 3 # кол-во мастеров
+  # Имя кластера oVirt — если не задан, используется capov.ovirtCluster
+  ovirtCluster: ""
+  # Тип ВМ: desktop, server, high_performance — если не задан, используется capov.defaultVmType
+  vmtype: ""
+  # Конфигурация CPU
+  cpu:
+    sockets: 2
+    cores: 4
+    threads: 1
+  # Конфигурация памяти (в МБ)
+  memory:
+    sizemb: 8192
+    guaranteedmb: 4096
+  # Размер диска ОС (ГБ)
+  osdisksizegb: 80
+  # Сетевые интерфейсы — если не заданы, используется [{vnicprofile: capov.defaultVnicProfile}]
+  nics: []
+  # Имя шаблона ВМ — если не задан, подбирается из capov.kubeTemplates[v<kubeVersion>]
+  template: ""
+  # labels:
+  #   - "my-custom-label=value"
+  # taints:
+  #   - key: mytaint/master
+  #     effect: NoSchedule
+  machineHealthCheck:
+    enabled: true
+    checks:
+      nodeStartupTimeoutSeconds: 0
+      unhealthyNodeConditions:
+        - status: Unknown
+          timeoutSeconds: 600
+          type: Ready
+        - status: "False"
+          timeoutSeconds: 600
+          type: Ready
+    remediation:
+      triggerIf:
+        unhealthyLessThanOrEqualTo: 100%
+
+workerNodes: # динамическая конфигурация worker-групп — добавляйте/убирайте группы по необходимости
+  # Для каждой группы: ovirtCluster, vmtype, nics, template — опциональны,
+  # при отсутствии используются значения из раздела capov:
+  workers: # имя группы
+    replicas: 2 # кол-во узлов в группе; при autoscaling.enabled — минимум (min-size)
+    # autoscaling: # автомасштабирование группы через Cluster API cluster-autoscaler
+    #   enabled: true
+    #   maxMachines: 6 # максимум узлов (аннотация cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size); минимум = replicas
+    #   # CAPOV создаёт/удаляет VM в oVirt при scale up/down (нужны квота/ресурсы и template).
+    #   # На management-кластере должен существовать ClusterRole shturval-cluster-autoscaler (ставит платформа).
+    #   # При enabled чарт не пишет MachineDeployment.spec.replicas (владеет autoscaler) — иначе helm-diff/template даёт вечный drift.
+    # ovirtCluster: ""   # если не задан — capov.ovirtCluster
+    # vmtype: ""         # если не задан — capov.defaultVmType
+    # nics: []           # если не задан — [{vnicprofile: capov.defaultVnicProfile}]
+    # template: ""       # если не задан — capov.kubeTemplates[v<kubeVersion>]
+    # Конфигурация CPU
+    cpu:
+      sockets: 2
+      cores: 4
+      threads: 1
+    # Конфигурация памяти (в МБ)
+    memory:
+      sizemb: 8192
+      guaranteedmb: 4096
+    # Размер диска ОС (ГБ)
+    osdisksizegb: 80
+    labels: # лейблы которые будут назначены узлам данной группы в подчинённом кластере
+      - "node.longhorn.io/create-default-disk=true"
+      - "my-custom-label-for-worker=myvalue"
+    # taints:
+    #   - key: mytaint/worker
+    #     effect: NoSchedule
+    machineHealthCheck:
+      enabled: true
+      checks:
+        nodeStartupTimeoutSeconds: 0
+        unhealthyNodeConditions:
+          - status: Unknown
+            timeoutSeconds: 600
+            type: Ready
+          - status: "False"
+            timeoutSeconds: 600
+            type: Ready
+      remediation:
+        triggerIf:
+          unhealthyLessThanOrEqualTo: 40%
+
+  infra: # группа infra-узлов (для сервисов мониторинга, логирования и т.п.)
+    replicas: 0
+    # ovirtCluster: ""   # если не задан — capov.ovirtCluster
+    # vmtype: ""         # если не задан — capov.defaultVmType
+    cpu:
+      sockets: 2
+      cores: 4
+      threads: 1
+    memory:
+      sizemb: 16384
+      guaranteedmb: 8192
+    osdisksizegb: 80
+    labels:
+      - "my-custom-label-for-infra=myvalue"
+    taints: # taint которые будут назначены узлам данной группы в подчинённом кластере
+      - key: mytaint/infra
+        effect: NoSchedule
+    machineHealthCheck:
+      enabled: true
+      checks:
+        nodeStartupTimeoutSeconds: 0
+        unhealthyNodeConditions:
+          - status: Unknown
+            timeoutSeconds: 600
+            type: Ready
+          - status: "False"
+            timeoutSeconds: 600
+            type: Ready
+      remediation:
+        triggerIf:
+          unhealthyLessThanOrEqualTo: 40%
+
+  ingress: # группа ingress-узлов
+    replicas: 0
+    # ovirtCluster: ""   # если не задан — capov.ovirtCluster
+    # vmtype: ""         # если не задан — capov.defaultVmType
+    cpu:
+      sockets: 2
+      cores: 2
+      threads: 1
+    memory:
+      sizemb: 4096
+      guaranteedmb: 2048
+    osdisksizegb: 50
+    labels:
+      - "node-role.kubernetes.io/ingress="
+    taints:
+      - key: node-role.kubernetes.io/ingress
+        effect: NoSchedule
+    machineHealthCheck:
+      enabled: true
+      checks:
+        nodeStartupTimeoutSeconds: 0
+        unhealthyNodeConditions:
+          - status: Unknown
+            timeoutSeconds: 600
+            type: Ready
+          - status: "False"
+            timeoutSeconds: 600
+            type: Ready
+      remediation:
+        triggerIf:
+          unhealthyLessThanOrEqualTo: 100%
+
+# Сеть подов в кластере
+podCIDR: 172.16.0.0/16
+# Сеть сервисов в кластере
+serviceCIDR: 10.96.0.0/12
+
+# IP адрес для kube-apiserver (VIP или внешний балансировщик)
+clusterAPI: 10.0.0.100
+# Используется ли внешний балансировщик для clusterAPI
+useExternalKubeAPILB: false
+
+# Ингресс записи менеджмент-кластера
+authMgmtIngress: "shturval.app.mgmt.example.com"
+logsMgmtIngress: "logs.app.mgmt.example.com"
+metricsMgmtIngress: "vminsert.app.mgmt.example.com"
+
+# Ингресс запись создаваемого кластера
+ingress: "app.cluster.example.com"
+# IP адрес Ingress контроллера или внешнего балансировщика
+ingressVip: 10.0.0.101
+# Используется ли внешний балансировщик для Ingress
+useExternalIngressLB: false
+
+# Путь до конфигурации кластера (для shturvald и backend)
+clusterConfigFile: "conf/clusterConfig.yaml"
+
+auditPolicy:
+  # Путь до шаблона audit конфигурации
+  template: "conf/audit_policy_template.yaml"
+  # Путь расположения файла audit на master нодах
+  location: "/etc/kubernetes/audit_policy.yaml"
+
+# Kubeadm patches — патчи для компонентов control plane (kube-apiserver, etcd и любые другие).
+# Каждый ключ кроме directory — отдельный файл в каталоге патчей.
+# Обязательно: patchTemplate. Опционально: filename (для kubeapi по умолчанию kube-apiserver.yaml, иначе <ключ>.yaml).
+# Документация: https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/control-plane-flags/#patches
+kubeadmPatches:
+  # Директория с патчами на узле. Создаётся автоматически через preKubeadmCommands.
+  # Обязательно задать, если ниже перечислены патчи.
+  # Рекомендуемое значение: "/etc/kubernetes/manifests-pathes"
+  directory: ""
+  # kubeapi:
+  #   patchTemplate: "conf/kube-apiserver.yaml"  # шаблон патча (поддерживает tpl)
+  #   resources:
+  #     limits:
+  #       memory: "1024Mi"
+  #       cpu: "2"
+  #     requests:
+  #       memory: "500Mi"
+  #       cpu: "250m"
+  # etcd:
+  #   patchTemplate: "conf/etcd.yaml"  # шаблон патча (поддерживает tpl)
+  #   resources:
+  #     limits:
+  #       memory: "500Mi"
+  #       cpu: "2"
+  #     requests:
+  #       memory: "500Mi"
+  #       cpu: "2"
+
+# Настройка NTP
+ntp:
+  ntpservers: []
+  timezone: Europe/Moscow
+
+# Secure installation (аудит, шифрование etcd и т.д.)
+secure: true
+
+# Пароль для подключения к opensearch (отправка логов)
+opensearchfluentbitpass: "mysecretpassword"
+
+# Сабчарт настройки VMAlert/VMRule в менеджмент-кластере под этот клиентский кластер
+capov-cluster-vm:
+  enable: false
+
+# Сабчарт добавления datasource этого кластера в grafana менеджмент-кластера
+capov-cluster-grafana:
+  enable: false
+
+# Конфигурация ClusterConfig CR
+clusterConfigProfileName: "" # имя профиля кластера (если не указан, используется default-client-cluster-profile)
+clusterType: "client" # тип кластера: client или platform (management)
+
+# Конфигурация CSI в ClusterConfig
+# csi:
+#   - defaultStorageClass: true
+#     serviceConfigName: shturval-local-csi
+#   - defaultStorageClass: false
+#     serviceConfigName: shturval-capov-csi
+#     providerSecretRef:
+#       name: ovirt-csi-ssc
+#       namespace: mycluster
+
+# Конфигурация ACME для ingress сертификатов
+# acme:
+#   serverURL: "https://issuer.example.com/acme/directory"
+#   rootCABundle: "<base64>"
+#   email: "admin@example.com"
+
+# Wildcard сертификат для ingress (base64)
+# ingressCert: ""
+# ingressKey: ""
+
+# Intermediate CA для ingress (base64)
+# caCert: ""
+# caKey: ""

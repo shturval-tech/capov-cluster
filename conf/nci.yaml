@@ -1,0 +1,114 @@
+metadata:
+  name: ShturvalInit
+spec:
+  nodeconfigselector: null
+  files:
+    - {path: /etc/kubernetes,                         type: directory, mode: "0700", owner: root, group: root}
+    - {path: /etc/kubernetes/manifests,               type: directory, mode: "0700", owner: root, group: root}
+    - {path: /etc/kubernetes/pki,                     type: directory, mode: "0700", owner: root, group: root}
+    - {path: /etc/kubernetes/pki/etcd,                type: directory, mode: "0700", owner: root, group: root}
+    - {path: /var/lib/etcd/,                          type: directory, mode: "0700", owner: etcd,  group: etcd}
+    - {path: /etc/cni/net.d/,                         type: directory, mode: "0700", owner: root, group: root}
+    - {path: /var/lib/kubelet/,                       type: directory, mode: "0700", owner: root, group: root}
+    - {path: /etc/containerd/,                        type: directory, mode: "0644", owner: root, group: root}
+    - {path: /etc/containerd/certs.d/,                type: directory, mode: "0644", owner: root, group: root}
+    - {path: /etc/containerd/certs.d/r.shturval.tech, type: directory, mode: "0644", owner: root, group: root}
+    {{- if .Values.kubeadmPatches.directory }}
+    - {path: {{ .Values.kubeadmPatches.directory | quote }}, type: directory, mode: "0755", owner: root, group: root}
+    {{- end }}
+    {{- if .controlplane }}
+    {{- if not .Values.useExternalKubeAPILB }}
+    - path: /etc/kubernetes/manifests/kube-vip.yaml
+      type: file
+      mode: "0600"
+      owner: root
+      group: root
+      content: |
+{{- tpl (.Files.Get "conf/kube-vip.yaml") . | nindent 8 }}
+    {{- end }}
+    {{- if .Values.secure }}
+    - path: /etc/kubernetes/secrets_encryption.yaml
+      type: file
+      mode: "0600"
+      owner: root
+      group: root
+      content: |-
+{{ include "capov-cluster.secretsEncryptionContent" . | indent 8 }}
+    - path: /etc/kubernetes/audit_policy.yaml
+      type: file
+      mode: "0600"
+      owner: root
+      group: root
+      content: |
+{{- tpl (.Files.Get .Values.auditPolicy.template) . | nindent 8 }}
+    {{- end }}
+    {{- if .Values.etcd.external }}
+    - path: /etc/kubernetes/pki/etcd/ca.crt
+      type: file
+      mode: "0600"
+      owner: root
+      group: root
+      content: |
+{{- .Files.Get .Values.etcd.external.caCrt | nindent 8 }}
+    - path: /etc/kubernetes/pki/etcd/healthcheck-client.crt
+      type: file
+      mode: "0600"
+      owner: root
+      group: root
+      content: |
+{{- .Files.Get .Values.etcd.external.apiCrt | nindent 8 }}
+    - path: /etc/kubernetes/pki/etcd/healthcheck-client.key
+      type: file
+      mode: "0600"
+      owner: root
+      group: root
+      content: |
+{{- .Files.Get .Values.etcd.external.apiKey | nindent 8 }}
+    {{- end }}
+    {{- range $name, $patch := .Values.kubeadmPatches }}
+    {{- if and (kindIs "map" $patch) $patch.patchTemplate $.Values.kubeadmPatches.directory }}
+    - path: {{ printf "%s/%s" $.Values.kubeadmPatches.directory (include "capov-cluster.kubeadmPatchFilename" (dict "name" $name "patch" $patch)) | quote }}
+      type: file
+      mode: "0644"
+      owner: root
+      group: root
+      content: |
+{{- tpl ($.Files.Get $patch.patchTemplate) $ | nindent 8 }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+  ntp:
+    timezone: {{ .Values.ntp.timezone | quote }}
+  runtimecfg:
+    cgroupdriver: systemd
+    pauseimage: {{ include "capov-cluster.pauseImage" . | quote }}
+    registries:
+      - name: r.shturval.tech
+        host: {{ printf "https://%s" .Values.systemregistry | quote }}
+        capabilities:
+          - resolve
+          - pull
+        {{- if eq .Values.systemregistry "r.shturval.tech" }}
+        license: {{ printf "Basic %s" (printf "user:%s" .Values.licensetoken | b64enc) | quote }}
+        {{- end }}
+  kernelmodules:
+    - {name: br_netfilter, autoload: true}
+    - {name: ip_vs_rr,     autoload: true}
+    - {name: zram,         autoload: false, blacklist: true}
+  sysctl:
+    param:
+      fs.inotify.max_user_instances:      "8192"
+      kernel.panic:                       "10"
+      kernel.panic_on_oops:               "1"
+      net.bridge.bridge-nf-call-iptables: "1"
+      net.core.bpf_jit_harden:           "0"
+      net.ipv4.ip_forward:               "1"
+      vm.max_map_count:                   "262144"
+      vm.overcommit_memory:              "1"
+  systemdunits:
+    - {name: containerd, active: true, enabled: true}
+    - {name: kubelet,    active: true, enabled: true}
+  users:
+    - {username: etcd, shell: /sbin/nologin, group: etcd}
+  swap: {}
+status: {}

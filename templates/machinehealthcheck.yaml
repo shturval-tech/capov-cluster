@@ -1,0 +1,22 @@
+{{- range $k, $v := .Values.workerNodes }}
+{{- if and $v.machineHealthCheck $v.machineHealthCheck.enabled }}
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineHealthCheck
+metadata:
+  name: {{ $.Release.Name }}-{{ $k }}-healthcheck
+  namespace: {{ $.Release.Name }}
+  labels:
+    cluster.x-k8s.io/cluster-name: {{ $.Release.Name }}
+    {{- include "capov-cluster.labels" $ | nindent 4 }}
+spec:
+  checks:
+{{- toYaml $v.machineHealthCheck.checks | nindent 4 }}
+  clusterName: {{ $.Release.Name }}
+  remediation:
+{{- toYaml $v.machineHealthCheck.remediation | nindent 4 }}
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/deployment-name: {{ $.Release.Name }}-{{ $k }}
+---
+{{- end }}
+{{- end }}

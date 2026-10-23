@@ -1,0 +1,44 @@
+{{- $kubeTemplate := index .Values.capov.kubeTemplates (printf "v%s" .Values.kubeVersion) }}
+{{- range $k, $v := .Values.workerNodes }}
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: OVirtMachineTemplate
+metadata:
+  name: {{ $.Release.Name }}-{{ $k }}
+  namespace: {{ $.Release.Name }}
+  labels:
+    cluster-name: {{ $.Release.Name }}
+    cluster.x-k8s.io/cluster-name: {{ $.Release.Name }}
+    node-role.kubernetes.io/workers: ""
+    {{- include "capov-cluster.labels" $ | nindent 4 }}
+spec:
+  template:
+    metadata: {}
+    spec:
+      provider: {{ include "capov-cluster.providerName" $ }}
+      ovirtcluster: {{ $v.ovirtCluster | default $.Values.capov.ovirtCluster | quote }}
+      vmtype: {{ $v.vmtype | default $.Values.capov.defaultVmType | quote }}
+      {{- with $v.cpu }}
+      cpu:
+        sockets: {{ .sockets }}
+        cores: {{ .cores }}
+        threads: {{ .threads }}
+      {{- end }}
+      {{- with $v.memory }}
+      memory:
+        sizemb: {{ .sizemb }}
+        {{- if .guaranteedmb }}
+        guaranteedmb: {{ .guaranteedmb }}
+        {{- end }}
+      {{- end }}
+      {{- if $v.osdisksizegb }}
+      osdisksizegb: {{ $v.osdisksizegb }}
+      {{- end }}
+      nics:
+      {{- if $v.nics }}
+        {{- toYaml $v.nics | nindent 8 }}
+      {{- else }}
+        - vnicprofile: {{ $.Values.capov.defaultVnicProfile | quote }}
+      {{- end }}
+      template: {{ $v.template | default $kubeTemplate | quote }}
+---
+{{- end }}

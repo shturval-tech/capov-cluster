@@ -1,0 +1,12 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: vmrule-user-{{ include "capsm-cluster-vm.monitoringid" . }}
+  namespace: {{ .Release.Name }}
+  labels:
+    cluster: {{ .Release.Name }}
+    monitoringid: "{{ include "capsm-cluster-vm.monitoringid" . }}"
+    role: user
+  {{- include "capsm-cluster-vm.labels" . | nindent 4 }}
+spec:
+  groups: []

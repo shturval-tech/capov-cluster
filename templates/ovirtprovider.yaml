@@ -1,0 +1,33 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: OVirtProvider
+metadata:
+  name: {{ include "capov-cluster.providerName" . }}
+  labels:
+    {{- include "capov-cluster.labels" . | nindent 4 }}
+    {{- if .Values.capov.ipPoolName }}
+    shturval.tech/ip-pool-name: {{ .Values.capov.ipPoolName | quote }}
+    {{- end }}
+  annotations:
+    shturval.tech/alloweditcsi: {{ .Values.capov.allowEditCSI | quote }}
+    shturval.tech/datacenter: {{ .Values.capov.datacenter | quote }}
+    shturval.tech/ovirtcluster: {{ .Values.capov.ovirtCluster | quote }}
+    shturval.tech/storagedomainname: {{ .Values.capov.storageDomainName | quote }}
+    shturval.tech/template-net-interface: {{ .Values.capov.templateNetInterface | quote }}
+    shturval.tech/vmtype: {{ .Values.capov.defaultVmType | quote }}
+    shturval.tech/vnicprofile: {{ .Values.capov.defaultVnicProfile | quote }}
+    {{- range $kubeVersion, $templateName := .Values.capov.kubeTemplates }}
+    template.shturval.tech/{{ $kubeVersion }}: {{ $templateName | quote }}
+    {{- end }}
+spec:
+  engine: {{ .Values.capov.engineAddress | quote }}
+  user: {{ .Values.capov.username | quote }}
+  pass: {{ .Values.capov.password | quote }}
+  tls:
+    insecure: {{ .Values.capov.tls.insecure }}
+    {{- if .Values.capov.tls.useSystemCA }}
+    cert: {{ .Values.capov.tls.useSystemCA }}
+    {{- end }}
+    {{- $caCerts := include "capov-cluster.capov.caCerts" . }}
+    {{- if $caCerts }}
+    certs: {{ $caCerts | b64enc | quote }}
+    {{- end }}

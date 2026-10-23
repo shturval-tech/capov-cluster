@@ -1,0 +1,334 @@
+controlplanehatype: {{ .Values.master.replicas }}
+sshprivatekey: ""
+sshuser: ""
+init:
+  typemeta:
+    kind: InitConfiguration
+    apiversion: kubeadm.k8s.io/v1beta4
+  bootstraptokens: []
+  noderegistration:
+    name: ""
+    crisocket: unix:///run/containerd/containerd.sock
+    taints: []
+    kubeletextraargs: {}
+    ignorepreflighterrors: []
+    imagepullpolicy: IfNotPresent
+  localapiendpoint:
+    advertiseaddress: ""
+    bindport: 0
+  skipphases:
+  - addon/kube-proxy
+  patches: null
+join:
+  typemeta:
+    kind: JoinConfiguration
+    apiversion: kubeadm.k8s.io/v1beta4
+  noderegistration:
+    name: ""
+    crisocket: unix:///run/containerd/containerd.sock
+    taints: []
+    kubeletextraargs: {}
+    ignorepreflighterrors: []
+    imagepullpolicy: IfNotPresent
+  cacertpath: ""
+  discovery:
+    bootstraptoken: null
+    file: null
+    tlsbootstraptoken: ""
+    timeout: null
+  controlplane: null
+  skipphases: []
+  patches: null
+kubelet:
+  typemeta:
+    kind: KubeletConfiguration
+    apiversion: kubelet.config.k8s.io/v1beta1
+  enableserver: null
+  staticpodpath: ""
+  syncfrequency:
+    duration: 0s
+  filecheckfrequency:
+    duration: 0s
+  httpcheckfrequency:
+    duration: 0s
+  staticpodurl: ""
+  staticpodurlheader: {}
+  address: ""
+  port: 0
+  readonlyport: 0
+  tlscertfile: ""
+  tlsprivatekeyfile: ""
+  tlsciphersuites: []
+  tlsminversion: VersionTLS13
+  rotatecertificates: true
+  servertlsbootstrap: true
+  authentication:
+    x509:
+      clientcafile: ""
+    webhook:
+      enabled: null
+      cachettl:
+        duration: 0s
+    anonymous:
+      enabled: null
+  authorization:
+    mode: ""
+    webhook:
+      cacheauthorizedttl:
+        duration: 0s
+      cacheunauthorizedttl:
+        duration: 0s
+  registrypullqps: null
+  registryburst: 0
+  eventrecordqps: null
+  eventburst: 0
+  enabledebugginghandlers: null
+  enablecontentionprofiling: false
+  healthzport: null
+  healthzbindaddress: ""
+  oomscoreadj: null
+  clusterdomain: ""
+  clusterdns: []
+  streamingconnectionidletimeout:
+    duration: 0s
+  nodestatusupdatefrequency:
+    duration: 4s
+  nodestatusreportfrequency:
+    duration: 0s
+  nodeleasedurationseconds: 0
+  imageminimumgcage:
+    duration: 15m0s
+  imagemaximumgcage:
+    duration: 0s
+  imagegchighthresholdpercent: 70
+  imagegclowthresholdpercent: 65
+  volumestatsaggperiod:
+    duration: 0s
+  kubeletcgroups: ""
+  systemcgroups: ""
+  cgrouproot: ""
+  cgroupsperqos: null
+  cgroupdriver: systemd
+  cpumanagerpolicy: ""
+  cpumanagerpolicyoptions: {}
+  cpumanagerreconcileperiod:
+    duration: 0s
+  memorymanagerpolicy: ""
+  topologymanagerpolicy: ""
+  topologymanagerscope: ""
+  topologymanagerpolicyoptions: {}
+  qosreserved: {}
+  runtimerequesttimeout:
+    duration: 0s
+  hairpinmode: ""
+  maxpods: 0
+  podcidr: ""
+  podpidslimit: null
+  resolverconfig: null
+  runonce: false
+  cpucfsquota: null
+  cpucfsquotaperiod: null
+  nodestatusmaximages: null
+  maxopenfiles: 0
+  contenttype: ""
+  kubeapiqps: null
+  kubeapiburst: 0
+  serializeimagepulls: null
+  maxparallelimagepulls: null
+  evictionhard: {}
+  evictionsoft: {}
+  evictionsoftgraceperiod: {}
+  evictionpressuretransitionperiod:
+    duration: 0s
+  evictionmaxpodgraceperiod: 0
+  evictionminimumreclaim: {}
+  podspercore: 0
+  enablecontrollerattachdetach: null
+  protectkerneldefaults: true
+  makeiptablesutilchains: null
+  iptablesmasqueradebit: null
+  iptablesdropbit: null
+  featuregates: {}
+  failswapon: null
+  memoryswap:
+    swapbehavior: ""
+  containerlogmaxsize: ""
+  containerlogmaxfiles: null
+  configmapandsecretchangedetectionstrategy: ""
+  systemreserved: {}
+  kubereserved: {}
+  reservedsystemcpus: ""
+  showhiddenmetricsforversion: ""
+  systemreservedcgroup: ""
+  kubereservedcgroup: ""
+  enforcenodeallocatable: []
+  allowedunsafesysctls: []
+  volumeplugindir: ""
+  providerid: ""
+  kernelmemcgnotification: false
+  logging:
+    format: ""
+    flushfrequency:
+      duration:
+        duration: 0s
+      serializeasstring: false
+    verbosity: 0
+    vmodule: []
+    options:
+      json:
+        splitstream: false
+        infobuffersize:
+          quantity:
+            format: ""
+  enablesystemloghandler: null
+  enablesystemlogquery: null
+  shutdowngraceperiod:
+    duration: 0s
+  shutdowngraceperiodcriticalpods:
+    duration: 0s
+  shutdowngraceperiodbypodpriority: []
+  reservedmemory: []
+  enableprofilinghandler: false
+  enabledebugflagshandler: null
+  seccompdefault: null
+  memorythrottlingfactor: null
+  registerwithtaints: []
+  registernode: null
+  tracing: null
+  localstoragecapacityisolation: null
+  containerruntimeendpoint: ""
+  imageserviceendpoint: ""
+clusterconfig:
+  typemeta:
+    kind: ClusterConfiguration
+    apiversion: kubeadm.k8s.io/v1beta4
+  etcd:
+  {{- if .Values.etcd.external }}
+    external:
+      endpoints:
+      {{- range $k, $v := .Values.etcd.external.endpoints }}
+        - {{ $v | quote }}
+      {{- end }}
+      caFile: "/etc/kubernetes/pki/etcd/ca.crt"
+      certFile: "/etc/kubernetes/pki/etcd/healthcheck-client.crt"
+      keyFile: "/etc/kubernetes/pki/etcd/healthcheck-client.key"
+  {{- else }}
+    local:
+      imagemeta:
+        imagerepository: ""
+        imagetag: {{ .Values.etcd.local.imageTag }}
+      datadir: {{ .Values.etcd.local.dataDir }}
+      extraargs:{{ toYaml .Values.etcd.local.extraArgs | nindent 8 }}
+      servercertsans: []
+      peercertsans: []
+    external: null
+  {{- end }}
+  networking:
+    servicesubnet: {{ .Values.serviceCIDR }}
+    podsubnet: {{ .Values.podCIDR }}
+    dnsdomain: cluster.local
+  kubernetesversion: {{ .Values.kubeVersion }}
+  controlplaneendpoint: {{ .Values.clusterAPI }}:6443
+  apiserver:
+    controlplanecomponent:
+      extraargs:
+        {{- if .Values.secure }}
+        audit-log-maxage: "30"
+        audit-log-maxbackup: "10"
+        audit-log-maxsize: "100"
+        audit-log-mode: batch
+        audit-log-path: /var/log/kube-api-audit/audit.log
+        audit-policy-file: "{{ .Values.auditPolicy.location }}"
+        encryption-provider-config: /etc/kubernetes/secrets_encryption.yaml
+        {{- end }}
+        authorization-mode: Node,RBAC
+        default-not-ready-toleration-seconds: "30"
+        default-unreachable-toleration-seconds: "30"
+        kubelet-certificate-authority: /etc/kubernetes/pki/ca.crt
+        profiling: "false"
+        request-timeout: 60s
+        tls-min-version: VersionTLS13
+      {{- if .Values.secure }}
+      extravolumes:
+      - name: audit
+        hostpath: {{ .Values.auditPolicy.location }}
+        mountpath: {{ .Values.auditPolicy.location }}
+        readonly: true
+        pathtype: File
+      - name: audit-log
+        hostpath: /var/log/kube-api-audit/
+        mountpath: /var/log/kube-api-audit/
+        readonly: false
+        pathtype: DirectoryOrCreate
+      - name: secret-encryption
+        hostpath: /etc/kubernetes/secrets_encryption.yaml
+        mountpath: /etc/kubernetes/secrets_encryption.yaml
+        readonly: true
+        pathtype: File
+      {{- else }}
+      extravolumes: []
+      {{- end }}
+    certsans:
+    - {{ .Values.clusterAPI }}
+    timeoutforcontrolplane: null
+  controllermanager:
+    extraargs:
+      bind-address: 0.0.0.0
+      node-monitor-grace-period: 20s
+      node-monitor-period: 2s
+      profiling: "false"
+      terminated-pod-gc-threshold: "10"
+      tls-min-version: VersionTLS13
+    extravolumes: []
+  scheduler:
+    extraargs:
+      bind-address: 0.0.0.0
+      profiling: "false"
+    extravolumes: []
+  dns:
+    imagemeta:
+      imagerepository: ""
+      imagetag: ""
+  certificatesdir: /etc/kubernetes/pki
+  imagerepository: r.shturval.tech
+  featuregates: {}
+  clustername: {{ .Release.Name }}
+secure: {{ .Values.secure }}
+timezone: {{ .Values.ntp.timezone }}
+ntpservers:{{ toYaml .Values.ntp.ntpservers | nindent 2 }}
+servicesconfig:
+  clustertype: ""
+  clustername: {{ .Release.Name }}
+  controlplanenodes: {{ .Values.master.replicas }}
+  shturvalreleaseversion: {{ .Values.shturvalReleaseVersion }}
+  ingressvip: {{ if not .Values.useExternalIngressLB }}{{ .Values.ingressVip }}{{ end }}
+  ingresscert: []
+  ingresskey: []
+  cacert: []
+  cakey: []
+  controlplaneendpoint: {{ .Values.clusterAPI }}:6443
+  podsubnet: {{ .Values.podCIDR }}
+  servicesubnet: {{ .Values.serviceCIDR }}
+  clusterapivip: {{ .Values.clusterAPI }}
+  deploykeepalived: {{ not .Values.useExternalKubeAPILB }}
+  ingresskeepalived: {{ not .Values.useExternalIngressLB }}
+  ingress: {{ printf "*.%s" .Values.ingress | quote }}
+  systemregistry: {{ .Values.systemregistry }}
+  licensetoken: {{ .Values.licensetoken }}
+  monitoringdashboards: ""
+  backenduri: ""
+  authuri: {{ .Values.authMgmtIngress }}
+  frontenduri: ""
+  opensearchuri: logs.shturval-logging.svc.cluster.local:9200
+  opensearchdashboarduri: ""
+  opensearchoperatorhost: {{ .Values.logsMgmtIngress }}
+  opensearchoperatoruri: ""
+  opensearchfluentbitpass: {{ .Values.opensearchfluentbitpass }}
+  monitoringid: {{ include "capov-cluster.monitoringid" . | quote }}
+  victoriametricsinserturi: ""
+  remotevictoriametricsendpoint: {{ .Values.metricsMgmtIngress }}
+  grafanaauthclientsecret: nyh2n6se28bvgxxm4ws2yw5893f6qfah
+  argocdauthclientsecret: akawunhm4gyg3atnq6hdeewdcvyqp3wb
+  enabledservices:{{ toYaml .Values.services.enabledservices | nindent 2 }}
+  disablesservices:{{ toYaml .Values.services.disablesservices | nindent 2 }}
+selinuxenabled: false

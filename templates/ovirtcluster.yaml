@@ -1,0 +1,12 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: OVirtCluster
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Name }}
+  labels:
+    cluster.x-k8s.io/cluster-name: {{ .Release.Name | quote }}
+    {{- include "capov-cluster.labels" . | nindent 4 }}
+spec:
+  controlPlaneEndpoint:
+    host: {{ .Values.clusterAPI }}
+    port: 6443

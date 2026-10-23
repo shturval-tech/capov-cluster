@@ -1,0 +1,10 @@
+apiVersion: 1
+datasources:
+  - access: proxy
+    name: {{ .Release.Name }}  # clusterName
+    type: prometheus
+    url: http://vms.shturval-backend.svc/select/{{ include "capsm-cluster-grafana.monitoringid" . }}/prometheus
+    withCredentials: true
+    jsonData:
+      oauthPassThru: true
+      tlsSkipVerify: true

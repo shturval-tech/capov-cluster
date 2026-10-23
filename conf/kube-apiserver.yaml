@@ -1,0 +1,4 @@
+spec:
+  containers:
+    - name: kube-apiserver
+      resources: {{ toYaml .Values.kubeadmPatches.kubeapi.resources | nindent 8 }}

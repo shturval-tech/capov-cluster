@@ -1,0 +1,56 @@
+{{- range $k, $v := .Values.workerNodes }}
+{{- $scale := include "capov-cluster.workerGroupScale" (dict "root" $ "name" $k "group" .) | fromYaml }}
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDeployment
+metadata:
+  name: {{ $.Release.Name }}-{{ $k }}
+  namespace: {{ $.Release.Name }}
+  labels:
+    cluster.x-k8s.io/cluster-name: {{ $.Release.Name }}
+    cluster.x-k8s.io/deployment-name: {{ $.Release.Name }}-{{ $k }}
+    {{- include "capov-cluster.labels" $ | nindent 4 }}
+  annotations:
+    machinedeployment.clusters.x-k8s.io/revision: "1"
+    {{- if $scale.enabled }}
+    cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size: {{ $scale.minSize | quote }}
+    cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size: {{ $scale.maxMachines | quote }}
+    {{- end }}
+spec:
+  clusterName: {{ $.Release.Name }}
+  {{- if not $scale.enabled }}
+  replicas: {{ $scale.replicas }}
+  {{- end }}
+  rollout:
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+      type: RollingUpdate
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: {{ $.Release.Name }}
+      cluster.x-k8s.io/deployment-name: {{ $.Release.Name }}-{{ $k }}
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: {{ $.Release.Name }}
+        cluster.x-k8s.io/deployment-name: {{ $.Release.Name }}-{{ $k }}
+        node-role.kubernetes.io/{{ $k }}: ""
+    spec:
+      bootstrap:
+        configRef:
+          apiGroup: bootstrap.cluster.x-k8s.io
+          kind: KubeadmConfigTemplate
+          name: {{ $.Release.Name }}-{{ $k }}
+      clusterName: {{ $.Release.Name }}
+      deletion:
+        nodeDeletionTimeoutSeconds: 600
+        nodeDrainTimeoutSeconds: 600
+        nodeVolumeDetachTimeoutSeconds: 300
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: OVirtMachineTemplate
+        name: {{ $.Release.Name }}-{{ $k }}
+      version: v{{ $.Values.kubeVersion }}
+---
+{{- end }}

@@ -1,0 +1,88 @@
+apiVersion: cluster.shturval.tech/v1beta1
+kind: ClusterConfig
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Name }}
+  labels:
+    {{- include "capov-cluster.labels" . | nindent 4 }}
+spec:
+  clusterName: {{ .Release.Name }}
+  clusterProfileName: {{ .Values.clusterConfigProfileName | default "default-client-cluster-profile" }}
+  clusterType: {{ .Values.clusterType | default "client" }}
+  deployKeepAlived: {{ not .Values.useExternalKubeAPILB }}
+  license: {{ .Values.licensetoken | quote }}
+  releaseVersion: {{ .Values.shturvalReleaseVersion | quote }}
+  secure: {{ .Values.secure }}
+  systemRegistry: {{ .Values.systemregistry | quote }}
+  systemRegistryConfig:
+    commonUrl: {{ .Values.systemregistry | quote }}
+  ntpConfig:
+    {{- if .Values.ntp.ntpservers }}
+    ntpServers:
+    {{- range .Values.ntp.ntpservers }}
+    - {{ . | quote }}
+    {{- end }}
+    {{- end }}
+    timeZone: {{ .Values.ntp.timezone | quote }}
+  systemServicesConfig:
+    csi:
+    {{- if .Values.csi }}
+    {{- range .Values.csi }}
+    - defaultStorageClass: {{ .defaultStorageClass | default true }}
+      serviceConfigName: {{ .serviceConfigName | quote }}
+      {{- if .providerSecretRef }}
+      providerSecretRef:
+        name: {{ .providerSecretRef.name | quote }}
+        namespace: {{ .providerSecretRef.namespace | quote }}
+      {{- end }}
+    {{- end }}
+    {{- else }}
+    - defaultStorageClass: true
+      serviceConfigName: shturval-local-csi
+    {{- end }}
+    enabledServices:
+    {{- range .Values.services.enabledservices }}
+    - {{ . | quote }}
+    {{- end }}
+    disabledServices:
+    {{- range .Values.services.disablesservices }}
+    - {{ . | quote }}
+    {{- end }}
+    ingress:
+      defaultIngressFQDN: {{ printf "*.%s" .Values.ingress | quote }}
+      {{- if and .Values.ingressVip (not .Values.useExternalIngressLB) }}
+      ingressVIP: {{ .Values.ingressVip | quote }}
+      {{- end }}
+      setupVIP: {{ not .Values.useExternalIngressLB }}
+      {{- if .Values.ingressCert }}
+      wildcardCert:
+        ingresscert: {{ .Values.ingressCert | quote }}
+        ingresskey: {{ .Values.ingressKey | quote }}
+      {{- end }}
+      {{- if .Values.caCert }}
+      intermediateCA:
+        cert: {{ .Values.caCert | quote }}
+        key: {{ .Values.caKey | quote }}
+      {{- end }}
+      {{- if .Values.acme }}
+      acmeConfig:
+        acmeserverurl: {{ .Values.acme.serverURL | quote }}
+        {{- if .Values.acme.rootCABundle }}
+        acmerootcabundle: {{ .Values.acme.rootCABundle | quote }}
+        {{- end }}
+        {{- if .Values.acme.rootCA }}
+        acmerootca: {{ .Values.acme.rootCA | quote }}
+        {{- end }}
+        {{- if .Values.acme.email }}
+        email: {{ .Values.acme.email | quote }}
+        {{- end }}
+      {{- end }}
+    loggingConfig:
+      {{- if .Values.logsMgmtIngress }}
+      loggingUrl: {{ .Values.logsMgmtIngress | quote }}
+      {{- end }}
+    monitoringConfig:
+      monitoringId: {{ include "capov-cluster.monitoringid" . | quote }}
+      {{- if .Values.metricsMgmtIngress }}
+      monitoringUrl: {{ .Values.metricsMgmtIngress | quote }}
+      {{- end }}

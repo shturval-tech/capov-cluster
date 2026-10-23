@@ -1,0 +1,31 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMAlert
+metadata:
+  name: vmalert-{{ include "capsm-cluster-vm.monitoringid" . }}
+  namespace: {{ .Release.Name }}
+  labels:
+    cluster: {{ .Release.Name }}
+  {{- include "capsm-cluster-vm.labels" . | nindent 4 }}
+spec:
+  datasource:
+    url: http://shturval-monitoring-vmselect.victoria-metrics:8481/select/{{ include "capsm-cluster-vm.monitoringid" . }}/prometheus
+  evaluationInterval: 30s
+  externalLabels:
+    cluster: {{ .Release.Name }}
+  image: {}
+  notifiers:
+  - url: http://vmalertmanager-alertmanager.victoria-metrics:9093
+  remoteRead:
+    url: http://shturval-monitoring-vmselect.victoria-metrics:8481/select/{{ include "capsm-cluster-vm.monitoringid" . }}/prometheus
+  remoteWrite:
+    url: http://shturval-monitoring-vminsert.victoria-metrics:8480/insert/{{ include "capsm-cluster-vm.monitoringid" . }}/prometheus
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  ruleSelector:
+    matchLabels:
+      monitoringid: "{{ include "capsm-cluster-vm.monitoringid" . }}"

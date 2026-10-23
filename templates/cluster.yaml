@@ -1,0 +1,33 @@
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Name }}
+  labels:
+    cluster.x-k8s.io/cluster-name: {{ .Release.Name | quote }}
+    {{- include "capov-cluster.labels" . | nindent 4 }}
+  annotations:
+    shturval.tech/clustername: {{ .Release.Name | quote }}
+    shturval.tech/config: {{ .Release.Name }}-cluster-config
+    shturval.tech/created_by_user: "helm-chart"
+    shturval.tech/ingress: {{ printf "*.%s" .Values.ingress | quote }}
+    shturval.tech/secure: {{ .Values.secure | quote }}
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+      - {{ .Values.podCIDR }}
+    services:
+      cidrBlocks:
+      - {{ .Values.serviceCIDR }}
+  controlPlaneEndpoint:
+    host: {{ .Values.clusterAPI }}
+    port: 6443
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: KubeadmControlPlane
+    name: {{ .Release.Name }}-control-plane
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: OVirtCluster
+    name: {{ .Release.Name }}

@@ -1,0 +1,89 @@
+{{- if eq (include "capov-cluster.autoscalingEnabled" .) "true" }}
+{{- $autoscalerName := printf "%s-autoscaler" .Release.Name }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $autoscalerName }}
+  namespace: {{ .Release.Name }}
+  labels:
+    {{- include "capov-cluster.labels" . | nindent 4 }}
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $autoscalerName }}
+  labels:
+    app.kubernetes.io/instance: autoscaler
+    app.kubernetes.io/name: clusterapi-cluster-autoscaler
+    {{- include "capov-cluster.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: shturval-cluster-autoscaler
+subjects:
+  - kind: ServiceAccount
+    name: {{ $autoscalerName }}
+    namespace: {{ .Release.Name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $autoscalerName }}
+  namespace: {{ .Release.Name }}
+  labels:
+    {{- include "capov-cluster.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: autoscaler
+      app.kubernetes.io/name: clusterapi-cluster-autoscaler
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: autoscaler
+        app.kubernetes.io/name: clusterapi-cluster-autoscaler
+    spec:
+      priorityClassName: system-cluster-critical
+      dnsPolicy: ClusterFirst
+      serviceAccountName: {{ $autoscalerName }}
+      containers:
+        - name: autoscaler
+          image: {{ include "capov-cluster.clusterAutoscalerImage" . }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - ./cluster-autoscaler
+            - --cloud-provider=clusterapi
+            - --namespace=kube-system
+            - --node-group-auto-discovery=clusterapi:clusterName={{ .Release.Name }}
+            - --kubeconfig=/etc/kubernetes/value
+            - --clusterapi-cloud-config-authoritative
+            - --enforce-node-group-min-size
+            - --write-status-configmap=false
+            - --logtostderr=true
+            - --v=1
+          ports:
+            - name: monitoring
+              containerPort: 8085
+              protocol: TCP
+          resources:
+            limits:
+              cpu: 100m
+              memory: 300Mi
+            requests:
+              cpu: 100m
+              memory: 300Mi
+          volumeMounts:
+            - name: cluster-api-kubeconfig
+              mountPath: /etc/kubernetes
+      volumes:
+        - name: cluster-api-kubeconfig
+          secret:
+            secretName: {{ .Release.Name }}-kubeconfig
+{{- end }}
