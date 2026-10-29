@@ -7,5 +7,4 @@ metadata:
     cluster: {{ .Release.Name }}
     monitoringid: "{{ include "capsm-cluster-vm.monitoringid" . }}"
     role: system
-  {{- include "capsm-cluster-vm.labels" . | nindent 4 }}
 {{ .Files.Get .Values.vmruleSystemSpecFile }}
