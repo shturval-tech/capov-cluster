@@ -102,9 +102,18 @@ Cached in Values._encryptionKey for one helm render so Secret and NCI always mat
 {{- $secretName := printf "%s-encryption-configuration" .Release.Name -}}
 {{- $existing := lookup "v1" "Secret" .Release.Name $secretName -}}
 {{- if and $existing $existing.data $existing.data.secret -}}
+{{- /* Существующий ключ не пересчитываем. */ -}}
 {{- $key = index $existing.data "secret" | b64dec -}}
+{{- else if .Values.etcd.encryptionSeed -}}
+{{- $key = sha256sum (printf "%s:%s-encryption-key" (toString .Values.etcd.encryptionSeed) .Release.Name) | trunc 32 -}}
 {{- else -}}
+{{- $cc := lookup "cluster.shturval.tech/v1beta1" "ClusterConfig" .Release.Name .Release.Name -}}
+{{- if and $cc $cc.spec -}}
+{{- /* Апгрейд существующего кластера: ключ не меняем. */ -}}
 {{- $key = sha256sum (printf "%s-encryption-key" .Release.Name) | trunc 32 -}}
+{{- else -}}
+{{- fail (printf "новый кластер %s: задайте etcd.encryptionSeed в values (случайная строка, например `openssl rand -base64 32`). Без seed шифрование etcd не будет безопасным." .Release.Name) -}}
+{{- end -}}
 {{- end -}}
 {{- $_ := set .Values "_encryptionKey" $key -}}
 {{- end -}}
@@ -392,6 +401,30 @@ kube-apiserver.yaml
 {{- .Values.kubeVersion -}}
 {{- else -}}
 {{- (include "capov-cluster.releaseProfile" . | fromYaml).kubeVersion -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Шаблон ВМ по умолчанию: capov.kubeTemplates[<effectiveKubeVersion>].
+Может вернуть пустую строку — тогда обязателен явный master.template / <group>.template.
+*/}}
+{{- define "capov-cluster.defaultVMBaseTemplate" -}}
+{{- $kubeVersion := include "capov-cluster.effectiveKubeVersion" . | toString | trim -}}
+{{- $normalizedVersion := printf "v%s" (trimPrefix "v" $kubeVersion) -}}
+{{- get (.Values.capov.kubeTemplates | default dict) $normalizedVersion | default "" -}}
+{{- end -}}
+
+{{/*
+Обязательный шаблон ВМ: явный override или capov.kubeTemplates по kubeVersion.
+Аргументы: dict "explicit" <значение> "root" $
+*/}}
+{{- define "capov-cluster.requiredVMBaseTemplate" -}}
+{{- $explicit := .explicit | default "" -}}
+{{- if $explicit -}}
+{{- $explicit -}}
+{{- else -}}
+{{- $fallback := include "capov-cluster.defaultVMBaseTemplate" .root -}}
+{{- required (printf "шаблон ВМ не задан: укажите template у группы/master либо добавьте capov.kubeTemplates[\"v%s\"]" (include "capov-cluster.effectiveKubeVersion" .root | trimPrefix "v")) $fallback -}}
 {{- end -}}
 {{- end -}}
 

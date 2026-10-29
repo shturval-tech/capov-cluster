@@ -97,7 +97,7 @@ helm upgrade --install mycluster . \
 | `allowEditCSI` | Флаг аннотации для Shturval CSI |
 | `enableCSI` | `true` — `shturval-capov-csi` и Secret `ovirt-csi-config` из полей `capov` |
 | `ipPoolName` | Имя пула IP (добавляется как label на `OVirtProvider`) |
-| `kubeTemplates` | Маппинг `v<k8s-version> -> template` в oVirt |
+| `kubeTemplates` | Маппинг `v<k8s-version> -> template` в oVirt. **Обязательно** заполнить для используемой версии Kubernetes (или задать `template` у master/группы) |
 
 ### Per-group переопределения
 
@@ -306,7 +306,24 @@ VM будут удалены контроллерами Cluster API и CAPOV п�
 4. Предпочтительно `helm upgrade --reset-then-reuse-values` вместе с файлом старых values, затем `helm diff upgrade` (если плагин установлен) или `helm template` / `helm upgrade --dry-run`.
 5. `shturvalReleaseVersion` меняйте только вместе с `platformUpgrade: true`. Иначе при живом кластере чарт останавливает рендер: смена `spec.releaseVersion` запускает обновление платформы. `helm template` и Argo CD не видят объекты кластера (`lookup` пустой), поэтому проверку нужно сделать до apply.
 6. `enabledServices` и `disabledServices` у существующего ClusterConfig чарт не переписывает: webhook запрещает их менять, списки читаются из живого объекта.
-7. `InfrastructureProvider` создаётся только если CRD уже есть (`infrastructureProvider.create: auto`) и объект с тем же именем не принадлежит другому релизу. Нативные секреты и аннотации `shturval.tech/*` чарт не удаляет: они нужны менеджмент-кластеру 2.14 и миграции 2.15.
-8. Поле `services.disablesservices` — явный список. Значение `all` в ClusterConfig не работает (его понимает только REST API backend и нельзя совместить с `enabledServices`). Некритичный сервис, которого нет ни в одном списке и у которого режим по умолчанию `auto`, будет установлен.
+7. **Новые поля ClusterConfig к существующему объекту не применяются.** Если ClusterConfig уже есть, чарт берёт его `spec` из кластера и меняет только `releaseVersion`. Поэтому `update.strategy`, `deletePersistentVolumes`, `ingressControllerType` и `vault` на существующем кластере **молча игнорируются** — ошибки не будет, но и значения из values не попадут в объект. Это сделано намеренно: webhook запрещает менять `spec` существующего ClusterConfig. Чтобы задать эти поля, их нужно прописать в живой ClusterConfig отдельно (или пересоздать кластер).
+8. `InfrastructureProvider` создаётся только если CRD уже есть (`infrastructureProvider.create: auto`) и объект с тем же именем не принадлежит другому релизу. Нативные секреты и аннотации `shturval.tech/*` чарт не удаляет: они нужны менеджмент-кластеру 2.14 и миграции 2.15.
+9. Поле `services.disablesservices` — явный список. Значение `all` в ClusterConfig не работает (его понимает только REST API backend и нельзя совместить с `enabledServices`). Некритичный сервис, которого нет ни в одном списке и у которого режим по умолчанию `auto`, будет установлен.
+
+10. **Шаблон ВМ привязан к `kubeVersion`.** `capov.kubeTemplates` в values содержит запись только для версии 2.15 (`v1.36.5`). Если оставить старый `kubeVersion`, чарт остановит рендер с ошибкой «kubeTemplates must contain image/template». Для апгрейда только чарта оставьте и `kubeVersion`, и запись `kubeTemplates` для своей версии; для апгрейда платформы обновите `kubeVersion` до `1.36.5`.
+
+## Шифрование etcd (encryption-at-rest)
+
+`etcd.encryptionSeed` — обязательное поле для нового кластера с `secure: true`. Без него чарт останавливает рендер: без seed ключ шифрования etcd не будет безопасным.
+
+```yaml
+etcd:
+  encryptionSeed: "своя-случайная-строка"   # openssl rand -base64 32
+```
+
+При апгрейде уже установленного кластера seed не требуется — чарт определяет апгрейд по наличию `ClusterConfig` с тем же именем и сохраняет прежний ключ. При `secure: false` шифрование не включается, seed тоже не нужен.
+
+> **Важно.** Seed храните вместе с паролями от кластера. При пересоздании кластера с другим seed ранее зашифрованные Secret прочитать не получится. У работающего кластера менять seed бессмысленно: пока существует ключ в кластере, используется он.
+
 
 Платформенное обновление клиентского кластера 2.14 → 2.15 делайте отдельно, через shturval-update / `platformUpgrade: true`, а не как побочный эффект `helm upgrade`.

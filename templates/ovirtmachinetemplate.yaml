@@ -1,4 +1,4 @@
-{{- $kubeTemplate := index .Values.capov.kubeTemplates (printf "v%s" .Values.kubeVersion) }}
+{{- $kubeTemplate := include "capov-cluster.defaultVMBaseTemplate" . }}
 {{- range $k, $v := .Values.workerNodes }}
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OVirtMachineTemplate
@@ -39,6 +39,6 @@ spec:
       {{- else }}
         - vnicprofile: {{ $.Values.capov.defaultVnicProfile | quote }}
       {{- end }}
-      template: {{ $v.template | default $kubeTemplate | quote }}
+      template: {{ include "capov-cluster.requiredVMBaseTemplate" (dict "explicit" $v.template "root" $) | quote }}
 ---
 {{- end }}
