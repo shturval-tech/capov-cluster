@@ -40,6 +40,14 @@ OVirtProvider name — defaults to Release.Name if not set
 {{- end }}
 
 {{/*
+Secret в capov-system с ключами username и password.
+OVirtProvider 2.15 требует spec.credentialsSecretName.
+*/}}
+{{- define "capov-cluster.credentialsSecretName" -}}
+{{- printf "%s-capov-provider-secret" (include "capov-cluster.providerName" .) -}}
+{{- end }}
+
+{{/*
 Read the ClusterConfig secret value
 */}}
 {{- define "capov-cluster.clusterConfig" -}}
@@ -286,41 +294,56 @@ replicas: {{ $replicas }}
 {{- end -}}
 
 {{/*
-cluster-autoscaler image: <systemregistry>/autoscaling/cluster-autoscaler:v<kubeVersion>
-Override via images.clusterAutoscaler when needed.
+cluster-autoscaler image.
+Тег из профиля релиза, не из kubeVersion: 2.15.0 — v1.36.1-325745, 2.14.x — v1.35.1.
+Реестр — systemregistry. Полный образ переопределяется images.clusterAutoscaler.
 */}}
 {{- define "capov-cluster.clusterAutoscalerImage" -}}
 {{- if and .Values.images .Values.images.clusterAutoscaler -}}
 {{- .Values.images.clusterAutoscaler -}}
 {{- else -}}
-{{- printf "%s/autoscaling/cluster-autoscaler:v%s" .Values.systemregistry .Values.kubeVersion -}}
+{{- $p := include "capov-cluster.releaseProfile" . | fromYaml -}}
+{{- $tag := $p.clusterAutoscalerTag | default (printf "v%s" (include "capov-cluster.effectiveKubeVersion" .)) -}}
+{{- printf "%s/autoscaling/cluster-autoscaler:%s" .Values.systemregistry $tag -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-kube-vip image for NCI (images.kubeVip, fallback nodeInit.kubevip.image)
+kube-vip image for NCI.
+images.kubeVip, иначе conf/releases, иначе nodeInit.kubevip.image.
 */}}
 {{- define "capov-cluster.kubeVipImage" -}}
 {{- $images := .Values.images | default dict -}}
 {{- if $images.kubeVip -}}
 {{- $images.kubeVip -}}
 {{- else -}}
+{{- $p := include "capov-cluster.releaseProfile" . | fromYaml -}}
+{{- if $p.kubeVipImage -}}
+{{- $p.kubeVipImage -}}
+{{- else -}}
 {{- $ni := .Values.nodeInit | default dict -}}
 {{- $kv := $ni.kubevip | default dict -}}
-{{- required "images.kubeVip (or nodeInit.kubevip.image) is required" $kv.image -}}
+{{- required "images.kubeVip (или профиль релиза, или nodeInit.kubevip.image) is required" $kv.image -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-pause image for NCI (images.pause, fallback nodeInit.pauseImage)
+pause image for NCI.
+images.pause, иначе conf/releases, иначе nodeInit.pauseImage.
 */}}
 {{- define "capov-cluster.pauseImage" -}}
 {{- $images := .Values.images | default dict -}}
 {{- if $images.pause -}}
 {{- $images.pause -}}
 {{- else -}}
+{{- $p := include "capov-cluster.releaseProfile" . | fromYaml -}}
+{{- if $p.pauseImage -}}
+{{- $p.pauseImage -}}
+{{- else -}}
 {{- $ni := .Values.nodeInit | default dict -}}
-{{- required "images.pause (or nodeInit.pauseImage) is required" $ni.pauseImage -}}
+{{- required "images.pause (или профиль релиза, или nodeInit.pauseImage) is required" $ni.pauseImage -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -347,4 +370,196 @@ kube-apiserver.yaml
 {{- else -}}
 {{- printf "%s.yaml" $name -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+Профиль релиза: conf/releases/<shturvalReleaseVersion>.yaml.
+Явные values важнее. Профиль нужен для полей, которых не было в 2.14 (CoreDNS),
+и как запасной источник, если kubeVersion пустой.
+*/}}
+{{- define "capov-cluster.releaseProfile" -}}
+{{- $ver := .Values.shturvalReleaseVersion | default "2.15.0" -}}
+{{- $path := printf "conf/releases/%s.yaml" $ver -}}
+{{- $raw := .Files.Get $path -}}
+{{- if not $raw -}}
+{{- fail (printf "нет профиля релиза %s (%s). Ожидаются 2.14.0, 2.14.1 или 2.15.0" $ver $path) -}}
+{{- end -}}
+{{- $raw -}}
+{{- end -}}
+
+{{- define "capov-cluster.effectiveKubeVersion" -}}
+{{- if .Values.kubeVersion -}}
+{{- .Values.kubeVersion -}}
+{{- else -}}
+{{- (include "capov-cluster.releaseProfile" . | fromYaml).kubeVersion -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Тег CoreDNS. Пустая строка для 2.14.x — блок dns в KubeadmControlPlane не пишется.
+Переопределение: images.coreDNS.
+*/}}
+{{- define "capov-cluster.coreDNSTag" -}}
+{{- if and .Values.images (index .Values.images "coreDNS") -}}
+{{- index .Values.images "coreDNS" -}}
+{{- else -}}
+{{- $p := include "capov-cluster.releaseProfile" . | fromYaml -}}
+{{- $p.coreDNSImageTag | default "" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Тег etcd. Явный etcd.local.imageTag важнее профиля релиза.
+*/}}
+{{- define "capov-cluster.etcdImageTag" -}}
+{{- $local := .Values.etcd.local | default dict -}}
+{{- if $local.imageTag -}}
+{{- $local.imageTag -}}
+{{- else -}}
+{{- $p := include "capov-cluster.releaseProfile" . | fromYaml -}}
+{{- required "etcd.local.imageTag (или etcdImageTag в профиле релиза) is required" $p.etcdImageTag -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Списки сервисов.
+Если ClusterConfig уже есть — берём списки из него (webhook запрещает правку).
+Иначе values и, для controllerType=gateway, та же нормализация, что ApplyIngressControllerServiceLists.
+*/}}
+{{- define "capov-cluster.serviceLists" -}}
+{{- $enabled := .Values.services.enabledservices | default (list) -}}
+{{- $disabled := .Values.services.disablesservices | default (list) -}}
+{{- $cc := lookup "cluster.shturval.tech/v1beta1" "ClusterConfig" .Release.Name .Release.Name -}}
+{{- if and $cc $cc.spec $cc.spec.systemServicesConfig -}}
+{{- $ssc := $cc.spec.systemServicesConfig -}}
+{{- if hasKey $ssc "enabledServices" -}}
+{{- $enabled = $ssc.enabledServices | default (list) -}}
+{{- end -}}
+{{- if hasKey $ssc "disabledServices" -}}
+{{- $disabled = $ssc.disabledServices | default (list) -}}
+{{- end -}}
+{{- else -}}
+{{- $gateway := eq (.Values.ingressControllerType | default "nginx") "gateway" -}}
+{{- $install := "shturval-ingress-controller" -}}
+{{- $remove := "shturval-gateway-api-crds" -}}
+{{- if $gateway -}}
+{{- $install = "shturval-gateway-api-crds" -}}
+{{- $remove = "shturval-ingress-controller" -}}
+{{- end -}}
+{{- $newEnabled := list -}}
+{{- $hasInstall := false -}}
+{{- range $enabled -}}
+{{- if ne . $remove -}}
+{{- $newEnabled = append $newEnabled . -}}
+{{- if eq . $install }}{{- $hasInstall = true }}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if not $hasInstall -}}
+{{- $newEnabled = append $newEnabled $install -}}
+{{- end -}}
+{{- $enabled = $newEnabled -}}
+{{- $newDisabled := list -}}
+{{- $hasRemove := false -}}
+{{- range $disabled -}}
+{{- if ne . $install -}}
+{{- $newDisabled = append $newDisabled . -}}
+{{- if eq . $remove }}{{- $hasRemove = true }}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if and $gateway (not $hasRemove) -}}
+{{- $newDisabled = append $newDisabled $remove -}}
+{{- end -}}
+{{- $disabled = $newDisabled -}}
+{{- end -}}
+enabled:
+{{ toYaml $enabled | nindent 2 }}
+disabled:
+{{ toYaml $disabled | nindent 2 }}
+{{- end -}}
+
+{{- define "capov-cluster.validateIngressCerts" -}}
+{{- $n := 0 -}}
+{{- if .Values.ingressCert }}{{- $n = add $n 1 }}{{- end -}}
+{{- if .Values.caCert }}{{- $n = add $n 1 }}{{- end -}}
+{{- if .Values.acme }}
+{{- if or .Values.acme.serverURL .Values.acme.rootCA .Values.acme.rootCABundle .Values.acme.email }}
+{{- $n = add $n 1 }}
+{{- end }}
+{{- end -}}
+{{- if .Values.vault }}
+{{- if or .Values.vault.server .Values.vault.path .Values.vault.token .Values.vault.caBundle .Values.vault.rootCA }}
+{{- $n = add $n 1 }}
+{{- end }}
+{{- end -}}
+{{- if gt (int $n) 1 -}}
+{{- fail "укажите только один способ сертификата ingress: ingressCert, caCert, acme или vault" -}}
+{{- end -}}
+{{- $ct := .Values.ingressControllerType | default "nginx" -}}
+{{- if not (or (eq $ct "nginx") (eq $ct "gateway")) -}}
+{{- fail "ingressControllerType должен быть nginx или gateway" -}}
+{{- end -}}
+{{- if and .Values.update .Values.update.strategy -}}
+{{- if not (or (eq .Values.update.strategy "InPlace") (eq .Values.update.strategy "RollingUpdate")) -}}
+{{- fail "update.strategy должен быть InPlace или RollingUpdate" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "capov-cluster.assertCompatibleUpgrade" -}}
+{{- $cc := lookup "cluster.shturval.tech/v1beta1" "ClusterConfig" .Release.Name .Release.Name -}}
+{{- if and $cc $cc.spec $cc.spec.releaseVersion -}}
+{{- $live := $cc.spec.releaseVersion | toString -}}
+{{- $want := .Values.shturvalReleaseVersion | toString -}}
+{{- if and $live (ne $live $want) (not .Values.platformUpgrade) -}}
+{{- fail (printf "ClusterConfig %s уже имеет spec.releaseVersion=%s, в values указано %s. Смена версии запускает обновление платформы. Чтобы обновить только чарт, оставьте shturvalReleaseVersion=%s. Чтобы обновить платформу, задайте platformUpgrade=true. При helm template и в Argo CD lookup пустой, проверка не срабатывает — сверяйте values с живым ClusterConfig до apply." .Release.Name $live $want $live) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "capov-cluster.preflight" -}}
+{{- include "capov-cluster.validateIngressCerts" . -}}
+{{- include "capov-cluster.assertCompatibleUpgrade" . -}}
+{{- end -}}
+
+{{/*
+Имя Secret, который cluster-manager читает как values shturval-capov-csi.
+Совпадает с backend (ovirt-csi-config в namespace кластера, ключ data).
+*/}}
+{{- define "capov-cluster.csiSecretName" -}}
+ovirt-csi-config
+{{- end -}}
+
+{{- define "capov-cluster.csiConfigYaml" -}}
+ovirtCredentials:
+  ovirtCaBundle: {{ include "capov-cluster.capov.caCerts" . | quote }}
+  ovirtInsecure: {{ .Values.capov.tls.insecure | toString | quote }}
+  ovirtPassword: {{ .Values.capov.password | quote }}
+  ovirtUrl: {{ .Values.capov.engineAddress | quote }}
+  ovirtUsername: {{ .Values.capov.username | quote }}
+storageClass:
+  parameters:
+    storageDomainName: {{ .Values.capov.storageDomainName | quote }}
+{{- end -}}
+
+{{/*
+true, если в ClusterConfig нужна ссылка на секрет, который собирает чарт.
+*/}}
+{{- define "capov-cluster.csiSecretWanted" -}}
+{{- $root := . -}}
+{{- $name := include "capov-cluster.csiSecretName" $root -}}
+{{- $on := false -}}
+{{- if $root.Values.csi -}}
+{{- range $root.Values.csi -}}
+{{- if eq .serviceConfigName "shturval-capov-csi" -}}
+{{- if not .providerSecretRef -}}
+{{- $on = true -}}
+{{- else if and (eq .providerSecretRef.name $name) (or (not .providerSecretRef.namespace) (eq .providerSecretRef.namespace $root.Release.Name)) -}}
+{{- $on = true -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- else if $root.Values.capov.enableCSI -}}
+{{- $on = true -}}
+{{- end -}}
+{{- if $on }}true{{ end -}}
 {{- end -}}

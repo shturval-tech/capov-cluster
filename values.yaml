@@ -1,6 +1,7 @@
 # Лицензия Штурвала (замените на реальную или передайте через --set / отдельный values-файл)
 licensetoken: "XXXXXXXX"
 # Имя хоста с зеркалом Штурвала
+nameOverride: ""
 systemregistry: myregistry.domain.tld
 
 # shturvalReleaseVersion: 2.11.0
@@ -9,55 +10,79 @@ systemregistry: myregistry.domain.tld
 # kubeVersion: 1.34.1
 # shturvalReleaseVersion: 2.13.1
 # kubeVersion: 1.34.3
-shturvalReleaseVersion: 2.14.0 # Версия устанавливаемого кластера Штурвал
-kubeVersion: 1.35.1 # Версия устанавливаемого кубернетеса
+shturvalReleaseVersion: 2.15.0 # Версия устанавливаемого кластера Штурвал
+kubeVersion: 1.36.5 # Версия устанавливаемого кубернетеса
 
-# Актуальные образы в 2.14 для bootstrap NCI (pause / kube-vip) и cluster-autoscaler
-images:
-  pause: r.shturval.tech/pause:3.10.1
-  kubeVip: r.shturval.tech/kube-vip:v1.0.4-280041
-  # clusterAutoscaler: r.shturval.tech/autoscaling/cluster-autoscaler:v1.35.1 # по умолчанию: r.shturval.tech/autoscaling/cluster-autoscaler:v{{ kubeVersion }}
+# pause, kube-vip, CoreDNS и cluster-autoscaler берутся из conf/releases/<shturvalReleaseVersion>.yaml.
+# Переопределить, если нужно:
+# images:
+#   pause: r.shturval.tech/pause:3.10.2
+#   kubeVip: r.shturval.tech/kube-vip:v1.2.4-321423
+#   coreDNS: v1.14.2
+#   clusterAutoscaler: r.shturval.tech/autoscaling/cluster-autoscaler:v1.36.1-325745
 
 services:
-  # Минимальный набор сервисов для 2.14 - значение применятся только в момент инициализации кластера и изменения ни к чему не приведут
+  # Минимальный набор клиентского кластера 2.15 (service-map configurations.client.minimal
+  # после нормализации nginx). Пишется в ClusterConfig только при создании:
+  # webhook запрещает менять enabledServices/disabledServices.
+  # shturval-gateway-api-crds критичный и в списки не входит: для nginx его
+  # включает каталог (ModeAuto), для gateway чарт переносит его в enabledServices.
+  # shturval-update в клиентский кластер 2.15 не ставится.
+  # Имя disablesservices сохранено: так поле называется в values 2.14.
   enabledservices:
-  - shturval-node-config
-  - shturval-trust-manager
-  - shturval-node-config-crds
-  - shturval-snapshotter
-  - shturval-metrics-collector-crds
-  - shturval-vip-provider
   - shturval-caching-dns
-  - shturval-vip
-  - shturval-networking
-  - shturval-policy-manager-crds
   - shturval-cert-manager
-  - shturval-services-crds
-  - shturval-snapshotter-crds
-  - shturval-services
-  - shturval-trust-manager-crds
-  - shturval-monitoring-crds
-  - shturval-update
+  - shturval-cert-manager-crds
   - shturval-ingress-controller
   - shturval-local-csi
-  - shturval-update-crds
-  - shturval-cert-manager-crds
+  - shturval-metrics-collector-crds
+  - shturval-monitoring-crds
+  - shturval-networking
+  - shturval-node-config
+  - shturval-node-config-crds
+  - shturval-policy-manager-crds
+  - shturval-services
+  - shturval-services-crds
+  - shturval-snapshotter
+  - shturval-snapshotter-crds
+  - shturval-trust-manager
+  - shturval-trust-manager-crds
+  - shturval-vip
+  - shturval-vip-provider
   disablesservices:
-  - shturval-metrics-collector
-  - shturval-log-collector-crds
   - shturval-backup
-  - shturval-scanner
-  - shturval-cd
-  - shturval-policy-manager
-  - shturval-scanner-crds
-  - shturval-rollouts
-  - shturval-cd-crds
-  - shturval-rollouts-crds
-  - shturval-gateway-api-crds
-  - shturval-descheduler
   - shturval-backup-crds
-  - shturval-log-collector
+  - shturval-cd
+  - shturval-cd-crds
   - shturval-cert-expiration
+  - shturval-descheduler
+  - shturval-log-collector
+  - shturval-log-collector-crds
+  - shturval-metrics-collector
+  - shturval-policy-manager
+  - shturval-rollouts
+  - shturval-rollouts-crds
+  - shturval-scanner
+  - shturval-scanner-crds
+
+# Обновление уже установленного чарта не должно менять releaseVersion.
+# true — явное согласие запустить обновление платформы (reconcile ClusterConfig).
+platformUpgrade: false
+
+# nginx или gateway. nginx не пишется в ClusterConfig (пустое значение = nginx).
+ingressControllerType: nginx
+
+# update.strategy пишется в ClusterConfig только если ключ задан: InPlace или RollingUpdate.
+# update:
+#   strategy: InPlace
+
+# deletePersistentVolumes пишется только если ключ задан явно.
+# deletePersistentVolumes: false
+
+infrastructureProvider:
+  # auto — создать InfrastructureProvider, если CRD уже есть и объект не занят другим релизом
+  # true — создать всегда; false — не создавать
+  create: auto
 
 # Конфигурация etcd
 etcd:
@@ -69,7 +94,9 @@ etcd:
     # apiKey: "conf/ext_etcd-client.key" # Ключ от клиентского сертификата
   local:
     dataDir: /var/lib/etcd
-    imageTag: v3.6.7
+    # imageTag берётся из conf/releases/<shturvalReleaseVersion>.yaml.
+    # Переопределить, если нужно:
+    # imageTag: v3.6.14-324917
     # extraArgs: {}
 
 # Инициализация узлов (ShturvalInit / nci.json)
@@ -85,7 +112,9 @@ capov:
 
   # Полный адрес oVirt Engine API
   engineAddress: "https://ovirt.example.com/ovirt-engine/api"
-  # Учётные данные oVirt Engine
+  # Учётные данные oVirt Engine. Чарт кладёт их в Secret
+  # <providerName>-capov-provider-secret в namespace capov-system
+  # (ключи username и password) и указывает его в OVirtProvider.spec.credentialsSecretName.
   username: "admin@internal"
   password: "secret"
 
@@ -114,6 +143,10 @@ capov:
   defaultVnicProfile: "ovirtmgmt"
   # Разрешить управление CSI через shturval (обязательно)
   allowEditCSI: "true"
+  # true — ClusterConfig ставит shturval-capov-csi и убирает shturval-local-csi.
+  # Чарт сам создаёт Secret ovirt-csi-config в namespace кластера (ключ data)
+  # из engineAddress, username, password, tls и storageDomainName.
+  enableCSI: false
   # Имя пула IP-адресов (опционально) — если задан, добавляется метка shturval.tech/ip-pool-name
   ipPoolName: ""  # пример: "my-pool"
 
@@ -122,10 +155,10 @@ capov:
   # Аннотация template.shturval.tech/<version> будет добавлена к OVirtProvider.
   # Если в группе узлов не задан template, автоматически подбирается по kubeVersion.
   kubeTemplates:
-    v1.35.1: redos8-shturval-2.14
+    v1.36.5: redos8-shturval-2.15
   # пример:
   # kubeTemplates:
-  #   v1.35.1: redos8-shturval-2.14
+  #   v1.36.5: redos8-shturval-2.15
   #   v1.34.3: redos8-shturval-2.13
   #   v1.33.1: redos8-shturval-2.11
 
@@ -351,7 +384,9 @@ secure: true
 # Пароль для подключения к opensearch (отправка логов)
 opensearchfluentbitpass: "mysecretpassword"
 
-# Сабчарт настройки VMAlert/VMRule в менеджмент-кластере под этот клиентский кластер
+# Сабчарт настройки VMAlert/VMRule в менеджмент-кластере под этот клиентский кластер.
+# cluster-manager сам создаёт эти объекты (vmalert-/vmrule-/vmalertmanagerconfig-<monitoringId>),
+# поэтому по умолчанию выключено. Включайте только для кластера без cluster-manager.
 capov-cluster-vm:
   enable: false
 
@@ -363,26 +398,36 @@ capov-cluster-grafana:
 clusterConfigProfileName: "" # имя профиля кластера (если не указан, используется default-client-cluster-profile)
 clusterType: "client" # тип кластера: client или platform (management)
 
-# Конфигурация CSI в ClusterConfig
+# CSI. По умолчанию shturval-local-csi.
+# capov.enableCSI: true подставляет shturval-capov-csi и Secret ovirt-csi-config.
+# Явный список csi переопределяет этот выбор. providerSecretRef не нужен:
+# для shturval-capov-csi чарт сам указывает секрет в namespace релиза.
 # csi:
 #   - defaultStorageClass: true
-#     serviceConfigName: shturval-local-csi
-#   - defaultStorageClass: false
 #     serviceConfigName: shturval-capov-csi
-#     providerSecretRef:
-#       name: ovirt-csi-ssc
-#       namespace: mycluster
 
-# Конфигурация ACME для ingress сертификатов
+# Сертификаты для ingress. Варианты взаимоисключающие: выберите один.
+#
+# Vault PKI
+# vault:
+#   server: "https://vault.example.com:8200"
+#   path: "pki/sign/my-role"
+#   mountPath: "/v1/auth/kubernetes"
+#   role: "shturval"
+#   token: ""
+#   caBundle: ""
+#   rootCA: ""
+#
+# ACME
 # acme:
 #   serverURL: "https://issuer.example.com/acme/directory"
 #   rootCABundle: "<base64>"
 #   email: "admin@example.com"
-
-# Wildcard сертификат для ingress (base64)
+#
+# Wildcard сертификат (base64)
 # ingressCert: ""
 # ingressKey: ""
-
-# Intermediate CA для ingress (base64)
+#
+# Intermediate CA (base64)
 # caCert: ""
 # caKey: ""

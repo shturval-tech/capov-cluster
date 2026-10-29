@@ -216,7 +216,7 @@ clusterconfig:
     local:
       imagemeta:
         imagerepository: ""
-        imagetag: {{ .Values.etcd.local.imageTag }}
+        imagetag: {{ include "capov-cluster.etcdImageTag" . }}
       datadir: {{ .Values.etcd.local.dataDir }}
       extraargs:{{ toYaml .Values.etcd.local.extraArgs | nindent 8 }}
       servercertsans: []
@@ -227,7 +227,7 @@ clusterconfig:
     servicesubnet: {{ .Values.serviceCIDR }}
     podsubnet: {{ .Values.podCIDR }}
     dnsdomain: cluster.local
-  kubernetesversion: {{ .Values.kubeVersion }}
+  kubernetesversion: {{ include "capov-cluster.effectiveKubeVersion" . }}
   controlplaneendpoint: {{ .Values.clusterAPI }}:6443
   apiserver:
     controlplanecomponent:
@@ -288,7 +288,7 @@ clusterconfig:
   dns:
     imagemeta:
       imagerepository: ""
-      imagetag: ""
+      imagetag: {{ include "capov-cluster.coreDNSTag" . | quote }}
   certificatesdir: /etc/kubernetes/pki
   imagerepository: r.shturval.tech
   featuregates: {}

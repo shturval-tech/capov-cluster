@@ -1,0 +1,54 @@
+{{- $mode := "auto" -}}
+{{- if .Values.infrastructureProvider -}}
+{{- $mode = .Values.infrastructureProvider.create | default "auto" | toString -}}
+{{- end -}}
+{{- $hasCRD := .Capabilities.APIVersions.Has "cluster.shturval.tech/v1beta1/InfrastructureProvider" -}}
+{{- $want := or (eq $mode "true") (and (eq $mode "auto") $hasCRD) -}}
+{{- if $want -}}
+{{- $name := include "capov-cluster.providerName" . -}}
+{{- $ns := "capov-system" -}}
+{{- $found := lookup "cluster.shturval.tech/v1beta1" "InfrastructureProvider" $ns $name -}}
+{{- $owner := "" -}}
+{{- if and $found $found.metadata $found.metadata.annotations -}}
+{{- $owner = index $found.metadata.annotations "meta.helm.sh/release-name" | default "" -}}
+{{- end -}}
+{{- if or (not (and $found $found.metadata)) (eq $owner .Release.Name) }}
+apiVersion: cluster.shturval.tech/v1beta1
+kind: InfrastructureProvider
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "capov-cluster.labels" . | nindent 4 }}
+spec:
+  type: capov
+  allowEditCSI: {{ eq (toString .Values.capov.allowEditCSI) "true" }}
+  {{- with .Values.capov.ipPoolName }}
+  ipAddressPoolName: {{ . | quote }}
+  {{- end }}
+  {{- if .Values.capov.kubeTemplates }}
+  templates:
+  {{- $active := include "capov-cluster.effectiveKubeVersion" . }}
+  {{- range $kubeVersion, $imageName := .Values.capov.kubeTemplates }}
+  {{- if semverCompare (printf "<=%s" $active) (trimPrefix "v" $kubeVersion) }}
+  - kubeVersion: {{ $kubeVersion | quote }}
+    template: {{ $imageName | quote }}
+    {{- if $.Values.capov.templateNetInterface }}
+    templateNetInterface: {{ $.Values.capov.templateNetInterface | quote }}
+    {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  providerRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: OVirtProvider
+    name: {{ $name }}
+  config:
+    ovirtCluster: {{ .Values.capov.ovirtCluster | quote }}
+    vmType: {{ .Values.capov.defaultVmType | quote }}
+    vnicProfile: {{ .Values.capov.defaultVnicProfile | quote }}
+    datacenter: {{ .Values.capov.datacenter | quote }}
+    csiStorageDomainName: {{ .Values.capov.storageDomainName | quote }}
+    storageDomainName: {{ .Values.capov.storageDomainName | quote }}
+{{- end }}
+{{- end }}

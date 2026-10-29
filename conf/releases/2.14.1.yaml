@@ -1,0 +1,8 @@
+# Профиль платформы Штурвал 2.14.1 (cluster-manager release-214 Version2141).
+kubeVersion: "1.35.1"
+etcdImageTag: "v3.6.7"
+clusterAutoscalerTag: "v1.35.1"
+pauseImage: "r.shturval.tech/pause:3.10.1"
+kubeVipImage: "r.shturval.tech/kube-vip:v1.0.4-296904"
+coreDNSImageTag: ""
+vmTemplate: "shturval-2.14.1"

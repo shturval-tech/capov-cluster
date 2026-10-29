@@ -1,3 +1,4 @@
+{{- include "capov-cluster.preflight" . -}}
 apiVersion: cluster.shturval.tech/v1beta1
 kind: ClusterConfig
 metadata:
@@ -12,6 +13,13 @@ spec:
   deployKeepAlived: {{ not .Values.useExternalKubeAPILB }}
   license: {{ .Values.licensetoken | quote }}
   releaseVersion: {{ .Values.shturvalReleaseVersion | quote }}
+  {{- if and .Values.update .Values.update.strategy }}
+  update:
+    updateStrategy: {{ .Values.update.strategy | quote }}
+  {{- end }}
+  {{- if hasKey .Values "deletePersistentVolumes" }}
+  deletePersistentVolumes: {{ .Values.deletePersistentVolumes }}
+  {{- end }}
   secure: {{ .Values.secure }}
   systemRegistry: {{ .Values.systemregistry | quote }}
   systemRegistryConfig:
@@ -28,24 +36,41 @@ spec:
     csi:
     {{- if .Values.csi }}
     {{- range .Values.csi }}
-    - defaultStorageClass: {{ .defaultStorageClass | default true }}
+    - defaultStorageClass: {{ hasKey . "defaultStorageClass" | ternary .defaultStorageClass true }}
       serviceConfigName: {{ .serviceConfigName | quote }}
       {{- if .providerSecretRef }}
       providerSecretRef:
         name: {{ .providerSecretRef.name | quote }}
         namespace: {{ .providerSecretRef.namespace | quote }}
+      {{- else if eq .serviceConfigName "shturval-capov-csi" }}
+      providerSecretRef:
+        name: {{ include "capov-cluster.csiSecretName" $ | quote }}
+        namespace: {{ $.Release.Name | quote }}
       {{- end }}
     {{- end }}
+    {{- else if .Values.capov.enableCSI }}
+    - defaultStorageClass: true
+      serviceConfigName: shturval-capov-csi
+      providerSecretRef:
+        name: {{ include "capov-cluster.csiSecretName" . | quote }}
+        namespace: {{ .Release.Name | quote }}
     {{- else }}
     - defaultStorageClass: true
       serviceConfigName: shturval-local-csi
     {{- end }}
+    {{- $svc := include "capov-cluster.serviceLists" . | fromYaml }}
     enabledServices:
-    {{- range .Values.services.enabledservices }}
+    {{- range $svc.enabled }}
+    {{- if or (not $.Values.capov.enableCSI) (ne . "shturval-local-csi") }}
     - {{ . | quote }}
     {{- end }}
+    {{- end }}
     disabledServices:
-    {{- range .Values.services.disablesservices }}
+    {{- $disabled := $svc.disabled | default list }}
+    {{- if and .Values.capov.enableCSI (not (has "shturval-local-csi" $disabled)) }}
+    {{- $disabled = append $disabled "shturval-local-csi" }}
+    {{- end }}
+    {{- range $disabled }}
     - {{ . | quote }}
     {{- end }}
     ingress:
@@ -54,6 +79,9 @@ spec:
       ingressVIP: {{ .Values.ingressVip | quote }}
       {{- end }}
       setupVIP: {{ not .Values.useExternalIngressLB }}
+      {{- if and .Values.ingressControllerType (ne .Values.ingressControllerType "nginx") }}
+      controllerType: {{ .Values.ingressControllerType | quote }}
+      {{- end }}
       {{- if .Values.ingressCert }}
       wildcardCert:
         ingresscert: {{ .Values.ingressCert | quote }}
@@ -75,6 +103,27 @@ spec:
         {{- end }}
         {{- if .Values.acme.email }}
         email: {{ .Values.acme.email | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if and .Values.vault .Values.vault.server }}
+      vaultConfig:
+        server: {{ .Values.vault.server | quote }}
+        path: {{ required "vault.path обязателен, если задан vault.server" .Values.vault.path | quote }}
+        {{- if .Values.vault.mountPath }}
+        mountPath: {{ .Values.vault.mountPath | quote }}
+        {{- end }}
+        {{- if .Values.vault.role }}
+        role: {{ .Values.vault.role | quote }}
+        {{- end }}
+        {{- if .Values.vault.token }}
+        tokenSecretRef:
+          name: vault-token
+        {{- end }}
+        {{- if .Values.vault.caBundle }}
+        caBundle: {{ .Values.vault.caBundle | b64enc | quote }}
+        {{- end }}
+        {{- if .Values.vault.rootCA }}
+        rootca: {{ .Values.vault.rootCA | b64enc | quote }}
         {{- end }}
       {{- end }}
     loggingConfig:

@@ -15,13 +15,15 @@ metadata:
     shturval.tech/template-net-interface: {{ .Values.capov.templateNetInterface | quote }}
     shturval.tech/vmtype: {{ .Values.capov.defaultVmType | quote }}
     shturval.tech/vnicprofile: {{ .Values.capov.defaultVnicProfile | quote }}
+    {{- $active := include "capov-cluster.effectiveKubeVersion" . }}
     {{- range $kubeVersion, $templateName := .Values.capov.kubeTemplates }}
+    {{- if semverCompare (printf "<=%s" $active) (trimPrefix "v" $kubeVersion) }}
     template.shturval.tech/{{ $kubeVersion }}: {{ $templateName | quote }}
+    {{- end }}
     {{- end }}
 spec:
   engine: {{ .Values.capov.engineAddress | quote }}
-  user: {{ .Values.capov.username | quote }}
-  pass: {{ .Values.capov.password | quote }}
+  credentialsSecretName: {{ include "capov-cluster.credentialsSecretName" . | quote }}
   tls:
     insecure: {{ .Values.capov.tls.insecure }}
     {{- if .Values.capov.tls.useSystemCA }}

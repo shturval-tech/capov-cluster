@@ -51,6 +51,6 @@ spec:
         apiGroup: infrastructure.cluster.x-k8s.io
         kind: OVirtMachineTemplate
         name: {{ $.Release.Name }}-{{ $k }}
-      version: v{{ $.Values.kubeVersion }}
+      version: v{{ include "capov-cluster.effectiveKubeVersion" $ }}
 ---
 {{- end }}
