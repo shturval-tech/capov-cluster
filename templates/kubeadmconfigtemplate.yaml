@@ -41,7 +41,7 @@ spec:
       - hostname $(cloud-init query --format "{{ $ciHostname }}")
       - echo "::1         ipv6-localhost ipv6-loopback" >/etc/hosts
       - echo "127.0.0.1   localhost" >>/etc/hosts
-      - echo "127.0.0.1   $(cloud-init query --format \"{{ $ciHostname }}\")" >>/etc/hosts
+      - echo "127.0.0.1   $(cloud-init query --format '{{ $ciHostname }}')" >>/etc/hosts
       - echo $(cloud-init query --format "{{ $ciHostname }}") >/etc/hostname
       - hostname $(cloud-init query --format "{{ $ciHostname }}")
       - while [ "$(systemctl is-active containerd)" != "active" ]; do echo "Waiting for containerd to come up..."; sleep 3; done
