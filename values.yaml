@@ -17,7 +17,7 @@ kubeVersion: 1.36.5 # Версия устанавливаемого куберн
 # Переопределить, если нужно:
 # images:
 #   pause: r.shturval.tech/pause:3.10.2
-#   kubeVip: r.shturval.tech/kube-vip:v1.2.4-321423
+#   kubeVip: r.shturval.tech/kube-vip:v1.2.4-326534
 #   coreDNS: v1.14.2
 #   clusterAutoscaler: r.shturval.tech/autoscaling/cluster-autoscaler:v1.36.1-325745
 

@@ -2,7 +2,7 @@ apiVersion: v2
 name: capov-cluster
 description: Helm-чарт для развёртывания Cluster API-кластера на провайдере oVirt (CAPOV) + Shturval ClusterConfig
 type: application
-version: 0.3.0
+version: 0.3.1
 appVersion: "2.15.0"
 dependencies:
   - name: capsm-cluster-vm
